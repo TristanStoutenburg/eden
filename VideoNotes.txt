@@ -1,0 +1,33 @@
+I'm on Day 8...
+
+So, I'm trying to figure out what to make of this implement your own ring buffer for the audio portion. It's cool stuff.
+
+My problem is that there is the audio callback, which I don't know exactly when that is called, but I'm assuming that it takes
+the user audio and passes it off to the second system
+
+The next thing is that there is the copying over for the writing portion of this
+
+so, it kind of makes sense that there are two portions of the buffer:
+the part where the play through the write cursor is loaded
+The part where new data is buffered into the write cursor
+
+
+ALSO, there's this weird magic number introduced into the code, which I don't get why the tutorial did that
+And, I feel like I don't get why the callback won't ask to get more data than we have, like
+SDL determines how much audio it wants, so if it asks for a bunch of stuff, it's going to repeat
+which will sound bad, but isn't the worst behavior in the world
+
+And last, this SDL lock audio seems a little odd, like can I just use semaphores? Or some other
+concurrency tool? That seems like more fun
+
+Hopefully I can finish number 8 tomorrow!!
+
+
+
+
+
+
+
+
+
+
