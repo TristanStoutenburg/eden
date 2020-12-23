@@ -18,7 +18,7 @@ int main(int argc, char** args) {
 		// run the game
 		strcpy(commandBuffer, "./../bin/eden");
 
-	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "gamelib") == 0) {
+	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "game") == 0) {
 		// recompile the eden shared library
 		strcpy(commandBuffer, "gcc -c eden.c -o ../bin/eden.o");
 		strcat(commandBuffer, " && gcc -shared ../bin/eden.o -o ../bin/eden.so");
@@ -35,7 +35,7 @@ int main(int argc, char** args) {
 		// show the help menu
 		strcpy(commandBuffer, "echo 'tool options:\n");
 		strcat(commandBuffer, "run - run the game\n");
-		strcat(commandBuffer, "build gamelib|platform|tool - recompile the game or the loop or the tool\n");
+		strcat(commandBuffer, "build game|platform|tool - recompile the game or the loop or the tool\n");
 		strcat(commandBuffer, "help\n");
 		strcat(commandBuffer, "'");
 
