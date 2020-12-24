@@ -131,8 +131,7 @@ int main(int argc, char** args) {
 		printf("Initialised an Audio device at frequency %d Hz, %d Channels, buffer size %d\n",
 			   audioSettings.freq, audioSettings.channels, audioSettings.samples);
 
-		if (audioSettings.format != AUDIO_S16LSB)
-		{
+		if (audioSettings.format != AUDIO_S16LSB) {
 			printf("Oops! We didn't get AUDIO_S16LSB as our sample format!\n");
 			SDL_CloseAudio();
 		}
@@ -142,7 +141,6 @@ int main(int argc, char** args) {
 	// weird gradient variables
 	ednPlatformState.gameDataSize = 1000000; // just do 1 MB for now, improve this later
 	ednPlatformState.gameData = malloc(ednPlatformState.gameDataSize);
-	// todo tks make an init call?
 
 	void *eden;
 	void (*ednUpdateFrame)(EdnPlatformState); 
@@ -191,7 +189,7 @@ int main(int argc, char** args) {
 		while (SDL_PollEvent(&event)) {
 
 			if (event.type == SDL_QUIT) {
-				isRunning = false;
+				isRunning &= false;
 
 			} else if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
 				if (ednPlatformState.imageFrameData != NULL) {
@@ -204,7 +202,8 @@ int main(int argc, char** args) {
 				ednPlatformState.imageWidth = event.window.data1;
 				ednPlatformState.imageHeight = event.window.data2;
 				ednPlatformState.imageFrameDataPitch = ednPlatformState.imageWidth * ednPlatformState.imageHeight;
-				ednPlatformState.imageFrameDataSize = ednPlatformState.imageWidth * ednPlatformState.imageHeight * ednPlatformState.imageBytesPerPixel;
+				ednPlatformState.imageFrameDataSize =
+					ednPlatformState.imageWidth * ednPlatformState.imageHeight * ednPlatformState.imageBytesPerPixel;
 
 				texture = SDL_CreateTexture(
 						renderer,
@@ -223,11 +222,9 @@ int main(int argc, char** args) {
 
 		}
 
+		// get the game input
 		keyboardState = SDL_GetKeyboardState(NULL); 
-		if (keyboardState[SDL_SCANCODE_ESCAPE] == 1) {
-			isRunning = false; 
-		} 
-
+		isRunning &= keyboardState[SDL_SCANCODE_ESCAPE] != 1;
 		ednPlatformState.isWPressed = keyboardState[SDL_SCANCODE_W] == 1; 
 		ednPlatformState.isAPressed = keyboardState[SDL_SCANCODE_A] == 1; 
 		ednPlatformState.isSPressed = keyboardState[SDL_SCANCODE_S] == 1; 
