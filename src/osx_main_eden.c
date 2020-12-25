@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <sys/stat.h> // file status
 
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
@@ -54,7 +55,6 @@ int main(int argc, char** args) {
 	ednPlatformState.imageFrameDataPitch = ednPlatformState.imageWidth * ednPlatformState.imageBytesPerPixel;
 	ednPlatformState.imageFrameData = malloc(ednPlatformState.imageFrameDataSize);
 
-
 	// init window
 	SDL_Renderer *renderer;
 	SDL_Texture *texture;
@@ -105,11 +105,10 @@ int main(int argc, char** args) {
 
 	AudioRingBuffer audioRingBuffer;
 	// NOTE: Sound test
-	int toneHz = 256;
-	int16_t toneVolume = 3000;
-	uint32_t runningSampleIndex = 0;
-	int squareWavePeriod = ednPlatformState.audioSamplesPerSecond / toneHz;
-	int halfSquareWavePeriod = squareWavePeriod / 2;
+	int runningSampleIndex = 0;
+	int toneVolume = 3000;
+	int tonePeriod = ednPlatformState.audioSamplesPerSecond / 256;
+
 	int secondaryBufferSize = ednPlatformState.audioSamplesPerSecond * ednPlatformState.audioBytesPerSample;
 	// Open our audio device:
 	{
@@ -144,6 +143,8 @@ int main(int argc, char** args) {
 
 	void *eden;
 	void (*ednUpdateFrame)(EdnPlatformState); 
+	struct stat edenFileStat;
+	time_t edenModificationTime;
 	// game init
 	{
 		eden = dlopen("../bin/eden.so", RTLD_LAZY|RTLD_LOCAL);
@@ -158,7 +159,9 @@ int main(int argc, char** args) {
 			fprintf(stderr, "load functions for edn game lib");
 			exit(1);
 		}
-		// todo tks hot reload this code
+
+		stat("../bin/eden.so", &edenFileStat);
+		edenModificationTime = edenFileStat.st_mtime;
 	}
 
 	uint64_t performanceCountFrequency = SDL_GetPerformanceFrequency();
@@ -167,6 +170,9 @@ int main(int argc, char** args) {
 	uint64_t elapsedCounter;
 	double msPerFrame;
 	double fps;
+
+	uint32_t audioWriteHead = 0;
+	uint32_t audioPlayHead = 0;
 
 	uint64_t previousCycle = _rdtsc();
 	uint64_t currentCycle;
@@ -201,7 +207,7 @@ int main(int argc, char** args) {
 
 				ednPlatformState.imageWidth = event.window.data1;
 				ednPlatformState.imageHeight = event.window.data2;
-				ednPlatformState.imageFrameDataPitch = ednPlatformState.imageWidth * ednPlatformState.imageHeight;
+				ednPlatformState.imageFrameDataPitch = ednPlatformState.imageWidth * ednPlatformState.imageBytesPerPixel;
 				ednPlatformState.imageFrameDataSize =
 					ednPlatformState.imageWidth * ednPlatformState.imageHeight * ednPlatformState.imageBytesPerPixel;
 
@@ -230,6 +236,33 @@ int main(int argc, char** args) {
 		ednPlatformState.isSPressed = keyboardState[SDL_SCANCODE_S] == 1; 
 		ednPlatformState.isDPressed = keyboardState[SDL_SCANCODE_D] == 1; 
 
+		// hot reload the eden library
+		{
+			if (ednPlatformState.frameCount % 30 == 0) { // only check once a second
+				stat("../bin/eden.so", &edenFileStat);
+				if (edenModificationTime < edenFileStat.st_mtime) {
+					edenModificationTime = edenFileStat.st_mtime;
+
+					if (dlclose(eden) != 0) {
+						fprintf(stderr, "close game lib. %s", dlerror());
+					}
+
+					eden = dlopen("../bin/eden.so", RTLD_LAZY|RTLD_LOCAL);
+					if (!eden) {
+						fprintf(stderr, "open eden game lib. %s", dlerror());
+						exit(1);
+					}
+
+					// load the functions for the judas shared lib
+					ednUpdateFrame = (void (*)(EdnPlatformState))dlsym(eden, "ednUpdateFrame");
+					if (!ednUpdateFrame) {
+						fprintf(stderr, "load functions for edn game lib. %s", dlerror());
+						exit(1);
+					}
+				}
+			}
+		}
+
 		ednUpdateFrame(ednPlatformState);
 
 		// update the sdl texture
@@ -238,15 +271,14 @@ int main(int argc, char** args) {
 					texture,
 					NULL, // do the whole texture
 					ednPlatformState.imageFrameData,
-					ednPlatformState.imageFrameDataPitch
-					);
+					ednPlatformState.imageFrameDataPitch);
 
 			SDL_RenderCopy(
 					renderer, texture,
-					NULL, NULL // source and destintaion rectangles
-					);
+					NULL, NULL); // source and destintaion rectangles
 
 			SDL_RenderPresent(renderer);
+
 		}
 
 		// update the audio
@@ -256,7 +288,7 @@ int main(int argc, char** args) {
 				int bytesToWrite = 0;
 				// todo tks we could check to make sure that the play cursor is different
 				if (byteToLock > audioRingBuffer.playCursor) {
-					bytesToWrite = (secondaryBufferSize - byteToLock);
+					bytesToWrite = secondaryBufferSize - byteToLock;
 					bytesToWrite += audioRingBuffer.playCursor;
 				} else {
 					bytesToWrite = audioRingBuffer.playCursor - byteToLock;
@@ -274,12 +306,11 @@ int main(int argc, char** args) {
 
 			int region1SampleCount = region1Size/ednPlatformState.audioBytesPerSample;
 			int16_t *sampleOut = (int16_t *)region1;
-			for(int sampleIndex = 0; sampleIndex < region1SampleCount; ++sampleIndex) {
-				float t = 2.0f * PI32 * (float)runningSampleIndex / (float)squareWavePeriod;
+			for (int sampleIndex = 0; sampleIndex < region1SampleCount; ++sampleIndex) {
+				float t = 2.0f * PI32 * (float)runningSampleIndex / (float)tonePeriod;
 				float sinValue = sinf(t);
 				runningSampleIndex++;
 				int16_t sampleValue = (int16_t) (sinValue * toneVolume);
-				// int16_t sampleValue = ((runningSampleIndex++ / halfSquareWavePeriod) % 2) ? toneVolume : -toneVolume;
 				*sampleOut++ = sampleValue;
 				*sampleOut++ = sampleValue;
 			}
@@ -287,11 +318,10 @@ int main(int argc, char** args) {
 			int region2SampleCount = region2Size/ednPlatformState.audioBytesPerSample;
 			sampleOut = (int16_t *)region2;
 			for (int sampleIndex = 0; sampleIndex < region2SampleCount; ++sampleIndex) {
-				float t = 2.0f * PI32 * (float)runningSampleIndex / (float)squareWavePeriod;
+				float t = 2.0f * PI32 * (float)runningSampleIndex / (float)tonePeriod;
 				float sinValue = sinf(t);
 				runningSampleIndex++;
 				int16_t sampleValue = (int16_t) (sinValue * toneVolume);
-				// int16_t sampleValue = ((runningSampleIndex++ / halfSquareWavePeriod) % 2) ? toneVolume : -toneVolume;
 				*sampleOut++ = sampleValue;
 				*sampleOut++ = sampleValue;
 			}
