@@ -22,7 +22,7 @@ typedef struct {
 	int audioSamplesPerSecond;
 	int audioBytesPerSample;
 	int audioFrameDataSize;
-	uint8_t *audioFrameData;
+	int16_t *audioFrameData;
 
 	bool isWPressed;
 	bool isAPressed;

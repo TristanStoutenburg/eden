@@ -18,7 +18,7 @@ int ednInit(EdnPlatformState ednPlatformState) {
 	EdnGameState *ednGameState = (EdnGameState *)ednPlatformState.gameData;
 	ednGameState->blueOffset = 0;
 	ednGameState->greenOffset = 0;
-	ednGameState->toneVolume = 3000;
+	ednGameState->toneVolume = 1000;
 	ednGameState->tonePeriod = ednPlatformState.audioSamplesPerSecond / 256;
 
 	return 0;
@@ -57,11 +57,10 @@ int ednUpdateFrame(EdnPlatformState ednPlatformState) {
 
 	// fill audio
 	{
-		// todo tks this is currently not being used, but might be useful later...
-		ednGameState->runningSampleIndex = ednPlatformState.audioFrameDataSize * ednPlatformState.frameCount;
 		for (int sampleIndex = 0; sampleIndex < ednPlatformState.audioFrameDataSize; sampleIndex++) {
 			ednPlatformState.audioFrameData[sampleIndex] = 
-				(uint8_t)ednGameState->toneVolume * sinf(2.0f * PI32 * (float)ednGameState->runningSampleIndex / (float)ednGameState->tonePeriod);
+				(int16_t)
+				(ednGameState->toneVolume * sinf(2.0f * PI32 * (float)ednGameState->runningSampleIndex / (float)ednGameState->tonePeriod));
 			ednGameState->runningSampleIndex += sampleIndex % 2;
 		}
 	}

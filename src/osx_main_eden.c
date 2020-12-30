@@ -21,7 +21,7 @@ typedef struct {
     int size;
     int writeCursor;
     int playCursor;
-    uint8_t *data;
+    int16_t *data;
 } AudioBuffer;
 
 typedef struct {
@@ -33,12 +33,16 @@ typedef struct {
 } PerformanceCounter;
 
 void audioCallback(void *userdata, uint8_t *stream, int length) {
+	// cast the stream to the signed, 16 bit integers that we're expecting
+	int16_t *dest = (int16_t *)stream;
+	int destLength = length / 2;
+
 	AudioBuffer *audioBuffer = (AudioBuffer *)userdata;
-	for (int index = 0; index < length; index++) {
-		if (((audioBuffer->playCursor + 1) % audioBuffer->size) == audioBuffer->playCursor) { 
-			stream[index] = 0; 
+	for (int index = 0; index < destLength; index++) {
+		if (((audioBuffer->playCursor + 1) % audioBuffer->size) == audioBuffer->writeCursor) { 
+			dest[index] = 0; 
 		} else {
-			stream[index] = audioBuffer->data[(audioBuffer->playCursor + index) % audioBuffer->size];
+			dest[index] = audioBuffer->data[audioBuffer->playCursor];
 			audioBuffer->playCursor = (audioBuffer->playCursor + 1) % audioBuffer->size;
 		}
 	}
@@ -78,15 +82,13 @@ int main(int argc, char** args) {
 	// Open our audio device:
 	{
 		// todo tks make this a little different?
-		ednPlatformState.frameDurationMs = 33.33f;
+		ednPlatformState.frameDurationMs = 1000.0f / 30.0f;
 		ednPlatformState.audioSamplesPerSecond = 48000;
-		ednPlatformState.audioBytesPerSample = sizeof(int16_t) * 2;
-		ednPlatformState.audioFrameDataSize =
-			(int) (ednPlatformState.audioSamplesPerSecond * ednPlatformState.audioBytesPerSample * ednPlatformState.frameDurationMs / 1000.f);
-
-		ednPlatformState.audioFrameData = malloc(ednPlatformState.audioFrameDataSize);
+		ednPlatformState.audioFrameDataSize = 3200; // need an int round to do this
+			// (int) (ednPlatformState.audioSamplesPerSecond * 2 * ednPlatformState.frameDurationMs / 1000.f);
+		ednPlatformState.audioFrameData = malloc(sizeof(int16_t) * ednPlatformState.audioFrameDataSize);
 		audioBuffer.size = ednPlatformState.audioFrameDataSize * 5; // todo tks I think 5 frames is enough room
-		audioBuffer.data = malloc(audioBuffer.size);
+		audioBuffer.data = malloc(sizeof(int16_t) * audioBuffer.size);
 		audioBuffer.playCursor = 0;
 		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 2; // todo tks one frame ahead..
 
@@ -94,7 +96,8 @@ int main(int argc, char** args) {
 		audioSettings.freq = ednPlatformState.audioSamplesPerSecond;
 		audioSettings.format = AUDIO_S16LSB;
 		audioSettings.channels = 2;
-		audioSettings.samples = 512; // todo tks why 512?
+		audioSettings.samples = ednPlatformState.audioFrameDataSize / 2; // one frame size...
+		// todo tks why 512? this means that the callback is called every 512 samples read
 		audioSettings.callback = &audioCallback;
 		audioSettings.userdata = &audioBuffer;
 		SDL_OpenAudio(&audioSettings, 0);
@@ -231,8 +234,8 @@ int main(int argc, char** args) {
 
 		// update the audio
 		for (int index = 0; index < ednPlatformState.audioFrameDataSize; index++) {
-			audioBuffer.data[audioBuffer.writeCursor] = ednPlatformState.audioFrameData[index];
 			if (((audioBuffer.writeCursor + 1) % audioBuffer.size) == audioBuffer.playCursor) { break; }
+			audioBuffer.data[audioBuffer.writeCursor] = ednPlatformState.audioFrameData[index];
 			audioBuffer.writeCursor = (audioBuffer.writeCursor + 1) % audioBuffer.size;
 		}
 
