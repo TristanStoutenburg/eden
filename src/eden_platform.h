@@ -2,6 +2,7 @@
 #define EDEN_PLATFORM_H
 
 #include <stdbool.h>
+#include <stdlib.h>
 
 typedef struct {
 
@@ -21,7 +22,7 @@ typedef struct {
 	int audioSamplesPerSecond;
 	int audioBytesPerSample;
 	int audioFrameDataSize;
-	void *audioFrameData;
+	uint8_t *audioFrameData;
 
 	bool isWPressed;
 	bool isAPressed;

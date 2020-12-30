@@ -1,0 +1,325 @@
+#include "eden_platform.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <sys/stat.h> // file status
+
+#include <SDL2/SDL.h>
+#include <GL/glew.h>
+#include <SDL2/SDL_opengl.h>
+#include <OpenGL/GLU.h>
+#include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h>
+#include <time.h>
+
+#include <x86intrin.h>
+#include <dlfcn.h>
+
+typedef struct {
+    int size;
+    int writeCursor;
+    int playCursor;
+    uint8_t *data;
+} AudioBuffer;
+
+void audioCallback(void *userdata, uint8_t *stream, int length) {
+	printf("\nI need to know the length... %d\n", length);
+	AudioBuffer *audioBuffer = (AudioBuffer *)userdata;
+
+	for (int index = 0; index < length; index++) {
+		if (audioBuffer->writeCursor == audioBuffer->playCursor) { break; }
+		stream[index] = audioBuffer->data[(audioBuffer->playCursor + index) % audioBuffer->size];
+		audioBuffer->playCursor = (audioBuffer->playCursor + 1) % audioBuffer->size;
+	}
+}
+
+
+int main(int argc, char** args) {
+	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) {
+		fprintf(stderr, "SDL init. %s\n", SDL_GetError());
+		exit(1);
+	}
+
+	EdnPlatformState ednPlatformState;
+	ednPlatformState.imageWidth = 1280;
+	ednPlatformState.imageHeight = 720;
+	ednPlatformState.imageBytesPerPixel = 4;
+	ednPlatformState.imageFrameDataSize = ednPlatformState.imageWidth * ednPlatformState.imageHeight * ednPlatformState.imageBytesPerPixel;
+	ednPlatformState.imageFrameDataPitch = ednPlatformState.imageWidth * ednPlatformState.imageBytesPerPixel;
+	ednPlatformState.imageFrameData = malloc(ednPlatformState.imageFrameDataSize);
+
+	// init window
+	SDL_Renderer *renderer;
+	SDL_Texture *texture;
+	{
+		SDL_Window *window = SDL_CreateWindow(
+				"Eden", // window title
+				SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, // position
+				ednPlatformState.imageWidth, ednPlatformState.imageHeight,
+				SDL_WINDOW_RESIZABLE // window flags, can be ored together
+				);
+
+		if (window == NULL) {
+			fprintf(stderr, "SDL create window. %s\n", SDL_GetError());
+			exit(1);
+		}
+
+		renderer = SDL_CreateRenderer(
+				window,
+				-1, // auto-detect the driver
+				0 // no special flags
+				);
+
+		if (renderer == NULL) {
+			fprintf(stderr, "SDL create renderer. %s\n", SDL_GetError());
+			exit(1);
+		}
+
+		texture = SDL_CreateTexture(
+				renderer,
+				SDL_PIXELFORMAT_ARGB8888,
+				SDL_TEXTUREACCESS_STREAMING,
+				ednPlatformState.imageWidth, ednPlatformState.imageHeight
+				);
+		if (texture == NULL) {
+			fprintf(stderr, "SDL create texture. %s\n", SDL_GetError());
+			exit(1);
+		}
+	}
+
+	// todo tks make this a little different?
+	ednPlatformState.frameDurationMs = 33.33f;
+	ednPlatformState.audioSamplesPerSecond = 48000;
+	ednPlatformState.audioBytesPerSample = sizeof(int16_t) * 2;
+	ednPlatformState.audioFrameDataSize =
+		(int) (ednPlatformState.audioSamplesPerSecond 
+				* ednPlatformState.audioBytesPerSample 
+				* ednPlatformState.frameDurationMs 
+				/ 1000.f);
+	ednPlatformState.audioFrameData = malloc(ednPlatformState.audioFrameDataSize);
+
+	// SDL_AudioDeviceID audioDeviceId = 0;
+	AudioBuffer audioBuffer;
+    audioBuffer.size = ednPlatformState.audioFrameDataSize * 5;
+    audioBuffer.data = calloc(audioBuffer.size, 1);
+	audioBuffer.playCursor = 0;
+	audioBuffer.writeCursor = 0;
+
+	// Open our audio device:
+	{
+		SDL_AudioSpec desiredAudioSettings = {0};
+
+		desiredAudioSettings.freq = ednPlatformState.audioSamplesPerSecond;
+		desiredAudioSettings.format = AUDIO_S16LSB;
+		desiredAudioSettings.channels = 2;
+		desiredAudioSettings.samples = 512; // todo tks why 512?
+		desiredAudioSettings.callback = &audioCallback;
+		desiredAudioSettings.userdata = &audioBuffer; // todo tks why not have this audio buffer somewhere?
+
+		SDL_OpenAudio(&desiredAudioSettings, 0);
+
+		printf("Initialised an Audio device at frequency %d Hz, %d Channels, buffer size %d\n",
+			   desiredAudioSettings.freq, desiredAudioSettings.channels, desiredAudioSettings.samples);
+
+		if (desiredAudioSettings.format != AUDIO_S16LSB) {
+			printf("Oops! We didn't get AUDIO_S16LSB as our sample format!\n");
+			SDL_CloseAudio();
+		}
+
+	}
+
+	// weird gradient variables
+	ednPlatformState.gameDataSize = 1000000; // just do 1 MB for now, improve this later
+	ednPlatformState.gameData = malloc(ednPlatformState.gameDataSize);
+
+	void *eden;
+	void (*ednInit)(EdnPlatformState); 
+	void (*ednUpdateFrame)(EdnPlatformState); 
+	struct stat edenFileStat;
+	time_t edenModificationTime;
+	// game init
+	{
+		eden = dlopen("../bin/eden.so", RTLD_LAZY|RTLD_LOCAL);
+		if (!eden) {
+			fprintf(stderr, "open eden game lib");
+			exit(1);
+		}
+
+		// load the functions for the judas shared lib
+		ednInit = (void (*)(EdnPlatformState))dlsym(eden, "ednInit");
+		ednUpdateFrame = (void (*)(EdnPlatformState))dlsym(eden, "ednUpdateFrame");
+		if (!ednUpdateFrame || !ednInit) {
+			fprintf(stderr, "load functions for edn game lib");
+			exit(1);
+		}
+
+		stat("../bin/eden.so", &edenFileStat);
+		edenModificationTime = edenFileStat.st_mtime;
+
+		// todo tks better spot for this?
+		ednInit(ednPlatformState);
+	}
+
+	uint64_t performanceCountFrequency = SDL_GetPerformanceFrequency();
+	uint64_t previousCounter = SDL_GetPerformanceCounter();
+	uint64_t currentCounter;
+	uint64_t elapsedCounter;
+	double msPerFrame;
+	double fps;
+
+	uint32_t audioWriteHead = 0;
+	uint32_t audioPlayHead = 0;
+
+	uint64_t previousCycle = _rdtsc();
+	uint64_t currentCycle;
+	uint64_t elapsedCycles;
+	double mcpf;
+
+	clock_t startClock, endClock;
+	double elapsedClockTime;
+	startClock = clock();
+	endClock = clock();
+	elapsedClockTime = ((double)(endClock - startClock)) / CLOCKS_PER_SEC;
+
+	ednPlatformState.isRunning = true;
+	SDL_Event event;
+	const Uint8 *keyboardState;
+	ednPlatformState.frameCount = 0;
+	while (ednPlatformState.isRunning) {
+		ednPlatformState.frameCount++;
+
+		while (SDL_PollEvent(&event)) {
+			if (event.type == SDL_QUIT) {
+				ednPlatformState.isRunning = false;
+			}
+
+			if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+				if (ednPlatformState.imageFrameData != NULL) {
+					free(ednPlatformState.imageFrameData);
+				}
+
+				if (texture != NULL) {
+					SDL_DestroyTexture(texture);
+				}
+
+				ednPlatformState.imageWidth = event.window.data1;
+				ednPlatformState.imageHeight = event.window.data2;
+				ednPlatformState.imageFrameDataPitch = ednPlatformState.imageWidth * ednPlatformState.imageBytesPerPixel;
+				ednPlatformState.imageFrameDataSize =
+					ednPlatformState.imageWidth * ednPlatformState.imageHeight * ednPlatformState.imageBytesPerPixel;
+
+				texture = SDL_CreateTexture(
+						renderer,
+						SDL_PIXELFORMAT_ARGB8888,
+						SDL_TEXTUREACCESS_STREAMING,
+						ednPlatformState.imageWidth, ednPlatformState.imageHeight
+						);
+				if (texture == NULL) {
+					fprintf(stderr, "SDL create texture. %s\n", SDL_GetError());
+					exit(1);
+				}
+
+				// todo tks something faster than malloc and free?
+				ednPlatformState.imageFrameData = malloc(ednPlatformState.imageFrameDataSize);
+			}
+		}
+
+		keyboardState = SDL_GetKeyboardState(NULL); 
+		ednPlatformState.isRunning = ednPlatformState.isRunning && keyboardState[SDL_SCANCODE_ESCAPE] != 1;
+		ednPlatformState.isWPressed = keyboardState[SDL_SCANCODE_W] == 1; 
+		ednPlatformState.isAPressed = keyboardState[SDL_SCANCODE_A] == 1; 
+		ednPlatformState.isSPressed = keyboardState[SDL_SCANCODE_S] == 1; 
+		ednPlatformState.isDPressed = keyboardState[SDL_SCANCODE_D] == 1; 
+
+		// hot reload the eden library
+		{
+			if (ednPlatformState.frameCount % 30 == 0) { // only check once a second
+				stat("../bin/eden.so", &edenFileStat);
+				if (edenModificationTime < edenFileStat.st_mtime) {
+					edenModificationTime = edenFileStat.st_mtime;
+
+					if (dlclose(eden) != 0) {
+						fprintf(stderr, "close game lib. %s", dlerror());
+					}
+
+					eden = dlopen("../bin/eden.so", RTLD_LAZY|RTLD_LOCAL);
+					if (!eden) {
+						fprintf(stderr, "open eden game lib. %s", dlerror());
+						exit(1);
+					}
+
+					// load the functions for the judas shared lib
+					ednUpdateFrame = (void (*)(EdnPlatformState))dlsym(eden, "ednUpdateFrame");
+					if (!ednUpdateFrame) {
+						fprintf(stderr, "load functions for edn game lib. %s", dlerror());
+						exit(1);
+					}
+				}
+			}
+		}
+
+		ednUpdateFrame(ednPlatformState);
+
+		// update the sdl texture
+		{
+			SDL_UpdateTexture(
+					texture,
+					NULL, // do the whole texture
+					ednPlatformState.imageFrameData,
+					ednPlatformState.imageFrameDataPitch);
+
+			SDL_RenderCopy(
+					renderer, texture,
+					NULL, NULL); // source and destintaion rectangles
+
+			SDL_RenderPresent(renderer);
+		}
+
+		// update the audio
+		{
+			for (int index = 0; index < ednPlatformState.audioFrameDataSize; index++) {
+				if (audioBuffer.writeCursor == audioBuffer.playCursor) { break; }
+				*(audioBuffer.data + (index % audioBuffer.size)) = ednPlatformState.audioFrameData[index];
+				audioBuffer.writeCursor = (audioBuffer.writeCursor + 1) % audioBuffer.size;
+			}
+		}
+
+		// performance counter work...
+		{
+			currentCounter = SDL_GetPerformanceCounter();
+			elapsedCounter = currentCounter - previousCounter;
+			msPerFrame = (1000.0f * (double)elapsedCounter) / (double)performanceCountFrequency;
+
+			if (msPerFrame < ednPlatformState.frameDurationMs) {
+				SDL_Delay((uint32_t)(ednPlatformState.frameDurationMs - msPerFrame) - 2);
+				while (msPerFrame < ednPlatformState.frameDurationMs) {
+					currentCounter = SDL_GetPerformanceCounter();
+					elapsedCounter = currentCounter - previousCounter;
+					msPerFrame = (1000.0f * (double)elapsedCounter) / (double)performanceCountFrequency;
+					// todo tks for some reason this isn't perfect.. fix this later, ok?
+				}
+
+			} else if (ednPlatformState.frameCount > 1) {
+				printf("\n\n\nThis is bad, missed a frame\n\n\n");
+			}
+
+			startClock = endClock;
+
+			fps = (double)performanceCountFrequency / (double)elapsedCounter;
+			currentCycle = _rdtsc();
+			elapsedCycles = currentCycle - previousCycle;
+			mcpf = (double)elapsedCycles / (1000.0f * 1000.0f);
+
+			// printf("%.02fmspf, %.02fmcpf, %.02ffps\n", msPerFrame, mcpf, fps);
+			
+			previousCounter = currentCounter;
+			previousCycle = currentCycle;
+		}
+	}
+
+	SDL_Quit();
+
+	return 0;
+}

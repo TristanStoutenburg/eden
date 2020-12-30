@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <math.h> // todo tks use built in function
+#define PI32 3.14159265329
+
 typedef struct {
 	int blueOffset;
 	int greenOffset;
@@ -11,7 +14,17 @@ typedef struct {
 	int runningSampleIndex;
 } EdnGameState;
 
-void ednUpdateFrame(EdnPlatformState ednPlatformState) {
+int ednInit(EdnPlatformState ednPlatformState) {
+	EdnGameState *ednGameState = (EdnGameState *)ednPlatformState.gameData;
+	ednGameState->blueOffset = 0;
+	ednGameState->greenOffset = 0;
+	ednGameState->toneVolume = 3000;
+	ednGameState->tonePeriod = ednPlatformState.audioSamplesPerSecond / 256;
+
+	return 0;
+}
+
+int ednUpdateFrame(EdnPlatformState ednPlatformState) {
 	EdnGameState *ednGameState = (EdnGameState *)ednPlatformState.gameData;
 
 	// render weird grandient
@@ -42,26 +55,25 @@ void ednUpdateFrame(EdnPlatformState ednPlatformState) {
 		}
 	}
 
+	// fill audio
+	{
+		// todo tks this is currently not being used, but might be useful later...
+		ednGameState->runningSampleIndex = ednPlatformState.audioFrameDataSize * ednPlatformState.frameCount;
+		for (int sampleIndex = 0; sampleIndex < ednPlatformState.audioFrameDataSize; sampleIndex++) {
+			ednPlatformState.audioFrameData[sampleIndex] = 
+				(uint8_t)ednGameState->toneVolume * sinf(2.0f * PI32 * (float)ednGameState->runningSampleIndex / (float)ednGameState->tonePeriod);
+			ednGameState->runningSampleIndex += sampleIndex % 2;
+		}
+	}
+
+	return 0;
 }
 
-//	// fill audio
-//	{
-//		// todo tks this is currently not being used, but might be useful later...
-//
-//		// these could be constants...
-//		int toneVolume = 3000;
-//		int tonePeriod = ednPlatformState.audioSamplesPerSecond / 256;
-//
-//		// maybe we should just do number of samples as the variable...
-//		int audioSampleCount = ednPlatformState.audioFrameDataSize / ednPlatformState.audioBytesPerSample;
-//
-//		int16_t *sampleOut = (int16_t *)ednPlatformState.audioFrameData;
-//		for(int sampleIndex = 0; sampleIndex < audioSampleCount; ++sampleIndex) {
-//			float t = 2.0f * PI32 * (float)ednGameState->runningSampleIndex / (float)tonePeriod;
-//			float sinValue = sinf(t);
-//			ednGameState->runningSampleIndex++;
-//			int16_t sampleValue = (int16_t) (sinValue * toneVolume);
-//			*sampleOut++ = sampleValue;
-//			*sampleOut++ = sampleValue;
-//		}
-//	}
+
+
+
+
+
+
+
+
