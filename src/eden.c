@@ -5,8 +5,10 @@
 
 #include <math.h> // todo tks use built in function
 #define PI32 3.14159265329
+#define ERROR_MESSAGE_SIZE 1024
 
 typedef struct {
+	char errorMessage[1024];
 	int blueOffset;
 	int greenOffset;
 	int tonePeriod;
@@ -14,8 +16,12 @@ typedef struct {
 	int runningSampleIndex;
 } EdnGameState;
 
+char* ednGetError(EdnPlatformState ednPlatformState) {
+	return ((EdnGameState *)ednPlatformState.gamePermanentData)->errorMessage;
+}
+
 int ednInit(EdnPlatformState ednPlatformState) {
-	EdnGameState *ednGameState = (EdnGameState *)ednPlatformState.gameData;
+	EdnGameState *ednGameState = (EdnGameState *)ednPlatformState.gamePermanentData;
 	ednGameState->blueOffset = 0;
 	ednGameState->greenOffset = 0;
 	ednGameState->toneVolume = 1000;
@@ -25,7 +31,7 @@ int ednInit(EdnPlatformState ednPlatformState) {
 }
 
 int ednUpdateFrame(EdnPlatformState ednPlatformState) {
-	EdnGameState *ednGameState = (EdnGameState *)ednPlatformState.gameData;
+	EdnGameState *ednGameState = (EdnGameState *)ednPlatformState.gamePermanentData;
 
 	// render weird grandient
 	{
@@ -49,7 +55,7 @@ int ednUpdateFrame(EdnPlatformState ednPlatformState) {
 			for (int x = 0; x < ednPlatformState.imageWidth; x++) {
 				uint8_t blue = x + ednGameState->blueOffset;
 				uint8_t green = y + ednGameState->greenOffset;
-				*pixel++ = ((green << 8) | (blue));
+				*pixel++ = ((green << 16) | (blue));
 			}
 			row += ednPlatformState.imageFrameDataPitch;
 		}
@@ -58,10 +64,13 @@ int ednUpdateFrame(EdnPlatformState ednPlatformState) {
 	// fill audio
 	{
 		for (int sampleIndex = 0; sampleIndex < ednPlatformState.audioFrameDataSize; sampleIndex++) {
+#if 0
 			ednPlatformState.audioFrameData[sampleIndex] = 
 				(int16_t)
 				(ednGameState->toneVolume * sinf(2.0f * PI32 * (float)ednGameState->runningSampleIndex / (float)ednGameState->tonePeriod));
 			ednGameState->runningSampleIndex += sampleIndex % 2;
+#endif
+			ednPlatformState.audioFrameData[sampleIndex] = 0;
 		}
 	}
 

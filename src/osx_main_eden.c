@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <sys/stat.h> // file status
+#include <sys/mman.h> // memory mapping
 
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
@@ -17,6 +18,11 @@
 #include <x86intrin.h>
 #include <dlfcn.h>
 
+#define kilobytes(Value) ((Value)*1024LL)
+#define megabytes(Value) (kilobytes(Value)*1024LL)
+#define gigabytes(Value) (megabytes(Value)*1024LL)
+#define terabytes(Value) (gigabytes(Value)*1024LL)
+
 typedef struct {
     int size;
     int writeCursor;
@@ -24,40 +30,85 @@ typedef struct {
     int16_t *data;
 } AudioBuffer;
 
-typedef struct {
-	uint64_t performanceCountFrequency;
-	uint64_t previousCounter;
-	double msPerFrame;
-	uint64_t previousCycle;
-	double mcpf;
-} PerformanceCounter;
-
 void audioCallback(void *userdata, uint8_t *stream, int length) {
 	// cast the stream to the signed, 16 bit integers that we're expecting
 	int16_t *dest = (int16_t *)stream;
 	int destLength = length / 2;
+	bool isCollision = false;
 
 	AudioBuffer *audioBuffer = (AudioBuffer *)userdata;
 	for (int index = 0; index < destLength; index++) {
 		if (((audioBuffer->playCursor + 1) % audioBuffer->size) == audioBuffer->writeCursor) { 
 			dest[index] = 0; 
+			isCollision = true;
 		} else {
 			dest[index] = audioBuffer->data[audioBuffer->playCursor];
 			audioBuffer->playCursor = (audioBuffer->playCursor + 1) % audioBuffer->size;
 		}
 	}
+	// todo tks figure out why this collision is occuring here every second or two
+	if (isCollision) { printf("Write and play audio head collided in callback\n"); }
 }
 
 int main(int argc, char** args) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) { fprintf(stderr, "SDL init. %s\n", SDL_GetError()); exit(1); }
 
 	EdnPlatformState ednPlatformState;
+
+	// preallocate everything according to the max possible size...
+	{
+		// enough memory to display two 4K displays with 4 bytes per pixel
+		ednPlatformState.imageFrameDataByteCount = 4 * 4096 * 2160 * 2;
+		// enough audio for 10 seconds of 48000 LR samples with ints
+		ednPlatformState.audioFrameDataByteCount = sizeof(int16_t) * 2 * 4800 * 10;
+		ednPlatformState.platformDataByteCount = ednPlatformState.audioFrameDataByteCount;
+		ednPlatformState.gamePermanentDataByteCount = megabytes(1);
+		ednPlatformState.gameTransientDataByteCount = gigabytes(2);
+		ednPlatformState.baseDataByteCount = 
+			ednPlatformState.imageFrameDataByteCount
+			+ ednPlatformState.audioFrameDataByteCount
+			+ ednPlatformState.platformDataByteCount
+			+ ednPlatformState.gamePermanentDataByteCount
+			+ ednPlatformState.gameTransientDataByteCount;
+
+		// todo tks internal vs game build
+		void *baseAddress = (void *)terabytes(2);
+
+		// allocate one big memory block here
+		ednPlatformState.baseData = mmap(baseAddress, ednPlatformState.baseDataByteCount,
+										 PROT_READ | PROT_WRITE,
+										 MAP_ANON | MAP_PRIVATE,
+										 -1, 0);
+
+		if (ednPlatformState.baseData == MAP_FAILED) {
+			fprintf(stderr, "failed to allocate the big chunk of memory");
+			exit(1);
+		}
+
+		// todo tks fix this
+		void *address = ednPlatformState.baseData;
+
+		ednPlatformState.platformData = address;
+		address += ednPlatformState.platformDataByteCount;
+
+		ednPlatformState.imageFrameData = address; 
+		address += ednPlatformState.imageFrameDataByteCount;
+
+		ednPlatformState.audioFrameData = address; 
+		address += ednPlatformState.audioFrameDataByteCount;
+
+		ednPlatformState.gamePermanentData = address; 
+		address += ednPlatformState.gamePermanentDataByteCount;
+
+		ednPlatformState.gameTransientData = address; 
+		address += ednPlatformState.gameTransientDataByteCount;
+	}
+
 	ednPlatformState.imageWidth = 1280;
 	ednPlatformState.imageHeight = 720;
 	ednPlatformState.imageBytesPerPixel = 4;
 	ednPlatformState.imageFrameDataSize = ednPlatformState.imageWidth * ednPlatformState.imageHeight * ednPlatformState.imageBytesPerPixel;
 	ednPlatformState.imageFrameDataPitch = ednPlatformState.imageWidth * ednPlatformState.imageBytesPerPixel;
-	ednPlatformState.imageFrameData = malloc(ednPlatformState.imageFrameDataSize);
 
 	// init window
 	SDL_Renderer *renderer;
@@ -84,20 +135,19 @@ int main(int argc, char** args) {
 		// todo tks make this a little different?
 		ednPlatformState.frameDurationMs = 1000.0f / 30.0f;
 		ednPlatformState.audioSamplesPerSecond = 48000;
-		ednPlatformState.audioFrameDataSize = 3200; // need an int round to do this
-			// (int) (ednPlatformState.audioSamplesPerSecond * 2 * ednPlatformState.frameDurationMs / 1000.f);
-		ednPlatformState.audioFrameData = malloc(sizeof(int16_t) * ednPlatformState.audioFrameDataSize);
-		audioBuffer.size = ednPlatformState.audioFrameDataSize * 5; // todo tks I think 5 frames is enough room
-		audioBuffer.data = malloc(sizeof(int16_t) * audioBuffer.size);
+		// this is audio samples per second divided by 30
+		ednPlatformState.audioFrameDataSize = 3200;
+		audioBuffer.size = ednPlatformState.audioFrameDataSize * 5;
+		audioBuffer.data = ednPlatformState.platformData;
 		audioBuffer.playCursor = 0;
-		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 2; // todo tks one frame ahead..
+		// set the write cursor a little ahead of the play cursor
+		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 2;
 
 		SDL_AudioSpec audioSettings = {0};
 		audioSettings.freq = ednPlatformState.audioSamplesPerSecond;
 		audioSettings.format = AUDIO_S16LSB;
 		audioSettings.channels = 2;
-		audioSettings.samples = ednPlatformState.audioFrameDataSize / 2; // one frame size...
-		// todo tks why 512? this means that the callback is called every 512 samples read
+		audioSettings.samples = ednPlatformState.audioFrameDataSize / 2;
 		audioSettings.callback = &audioCallback;
 		audioSettings.userdata = &audioBuffer;
 		SDL_OpenAudio(&audioSettings, 0);
@@ -112,13 +162,10 @@ int main(int argc, char** args) {
 		}
 	}
 
-	// weird gradient variables
-	ednPlatformState.gameDataSize = 1000000; // just do 1 MB for now, improve this later
-	ednPlatformState.gameData = malloc(ednPlatformState.gameDataSize);
-
 	void *eden;
 	int (*ednInit)(EdnPlatformState); 
 	int (*ednUpdateFrame)(EdnPlatformState); 
+	char* (*ednGetError)(EdnPlatformState); 
 	struct stat edenFileStat;
 	time_t edenModificationTime;
 	// game init
@@ -130,27 +177,30 @@ int main(int argc, char** args) {
 		// load the functions for the judas shared lib
 		ednInit = (int (*)(EdnPlatformState))dlsym(eden, "ednInit");
 		ednUpdateFrame = (int (*)(EdnPlatformState))dlsym(eden, "ednUpdateFrame");
+		ednGetError = (char* (*)(EdnPlatformState))dlsym(eden, "ednGetError");
 
-		if (!ednUpdateFrame || !ednInit) { fprintf(stderr, "load functions for edn game lib"); exit(1); }
+		if (!ednUpdateFrame || !ednInit || !ednGetError) { fprintf(stderr, "load functions for edn game lib"); exit(1); }
 
 		stat("../bin/eden.so", &edenFileStat);
 		edenModificationTime = edenFileStat.st_mtime;
 
 		// todo tks better spot for this init?
-		if (ednInit(ednPlatformState) != 0) { fprintf(stderr, "init eden call\n"); exit(1); }
+		if (ednInit(ednPlatformState) != 0) { fprintf(stderr, "init eden call. %s\n", ednGetError(ednPlatformState)); exit(1); }
 	}
 
-	PerformanceCounter performance = {0};
-	{
-		performance.performanceCountFrequency = SDL_GetPerformanceFrequency();
-		performance.previousCounter = SDL_GetPerformanceCounter();
-		performance.previousCycle = _rdtsc();
-	}
+	// performance variables
+	uint64_t performanceCountFrequency = SDL_GetPerformanceFrequency();
+	uint64_t previousCounter = SDL_GetPerformanceCounter();
+	double msPerFrame = 0;
+	uint64_t previousCycle = _rdtsc();
+	double mcpf = 0;
 
-	ednPlatformState.isRunning = true;
+	// event variables
 	SDL_Event event;
 	const Uint8 *keyboardState;
+
 	ednPlatformState.frameCount = 0;
+	ednPlatformState.isRunning = true;
 
 	while (ednPlatformState.isRunning) {
 		ednPlatformState.frameCount++;
@@ -163,10 +213,10 @@ int main(int argc, char** args) {
 				}
 
 				if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-					if (ednPlatformState.imageFrameData != NULL) {
+					// if (ednPlatformState.imageFrameData != NULL) {
 						// todo tks something faster than malloc and free?
-						free(ednPlatformState.imageFrameData);
-					}
+						// free(ednPlatformState.imageFrameData);
+					// }
 
 					if (texture != NULL) {
 						SDL_DestroyTexture(texture);
@@ -178,6 +228,11 @@ int main(int argc, char** args) {
 					ednPlatformState.imageFrameDataSize =
 						ednPlatformState.imageWidth * ednPlatformState.imageHeight * ednPlatformState.imageBytesPerPixel;
 
+					if (ednPlatformState.imageFrameDataSize > ednPlatformState.imageFrameDataByteCount) {
+						fprintf(stderr, "display is too big\n");
+						exit(1);
+					}
+
 					texture = SDL_CreateTexture(renderer,
 							SDL_PIXELFORMAT_ARGB8888,
 							SDL_TEXTUREACCESS_STREAMING,
@@ -188,7 +243,7 @@ int main(int argc, char** args) {
 					}
 
 					// todo tks something faster than malloc and free?
-					ednPlatformState.imageFrameData = malloc(ednPlatformState.imageFrameDataSize);
+					// ednPlatformState.imageFrameData = malloc(ednPlatformState.imageFrameDataSize);
 				}
 			}
 
@@ -215,14 +270,16 @@ int main(int argc, char** args) {
 
 					// load the functions for the judas shared lib
 					ednUpdateFrame = (int (*)(EdnPlatformState))dlsym(eden, "ednUpdateFrame");
+					ednGetError = (char* (*)(EdnPlatformState))dlsym(eden, "ednGetError");
 
-					if (!ednUpdateFrame) { fprintf(stderr, "load functions for edn game lib. %s", dlerror()); exit(1); }
+					if (!ednUpdateFrame || !ednGetError) { fprintf(stderr, "load functions for edn game lib. %s\n", dlerror()); exit(1); }
 				}
 			}
 		}
 
+		// have eden update the frame
 		{
-			if (ednUpdateFrame(ednPlatformState) != 0) { fprintf(stderr, "error updating frame\n"); exit(1); }
+			if (ednUpdateFrame(ednPlatformState) != 0) { fprintf(stderr, "error updating frame. %s\n", ednGetError(ednPlatformState)); exit(1); }
 		}
 
 		// update the sdl texture
@@ -234,41 +291,36 @@ int main(int argc, char** args) {
 
 		// update the audio
 		for (int index = 0; index < ednPlatformState.audioFrameDataSize; index++) {
-			if (((audioBuffer.writeCursor + 1) % audioBuffer.size) == audioBuffer.playCursor) { break; }
+			if (((audioBuffer.writeCursor + 1) % audioBuffer.size) == audioBuffer.playCursor) {
+				printf("Write and play audio head collided while copying\n");
+				break;
+			}
 			audioBuffer.data[audioBuffer.writeCursor] = ednPlatformState.audioFrameData[index];
 			audioBuffer.writeCursor = (audioBuffer.writeCursor + 1) % audioBuffer.size;
 		}
 
-		// lock in the framerate by waiting
+		// lock in the framerate by waiting, and output the performance
 		{
-			// todo tks this is doing a LOT more than this needs to, right? I feel like this could be cleaned up
-			performance.msPerFrame = 1000.0f 
-				* (SDL_GetPerformanceCounter() - performance.previousCounter) 
-				/ (double)performance.performanceCountFrequency;
-			performance.mcpf = (double)(_rdtsc() -  performance.previousCycle) / (1000.0f * 1000.0f);
+			msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (double)performanceCountFrequency;
+			mcpf = (double)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
 
-			if (performance.msPerFrame < ednPlatformState.frameDurationMs) {
-				SDL_Delay((uint32_t)(ednPlatformState.frameDurationMs - performance.msPerFrame) - 2);
+			if (msPerFrame < ednPlatformState.frameDurationMs) {
+				SDL_Delay((uint32_t)(ednPlatformState.frameDurationMs - msPerFrame) - 2);
 				do {
-					performance.msPerFrame = 1000.0f 
-						* (SDL_GetPerformanceCounter() - performance.previousCounter) 
-						/ (double)performance.performanceCountFrequency;
-					performance.mcpf = (double)(_rdtsc() -  performance.previousCycle) / (1000.0f * 1000.0f);
-				} while (performance.msPerFrame < ednPlatformState.frameDurationMs);
+					msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (double)performanceCountFrequency;
+					mcpf = (double)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
+				} while (msPerFrame < ednPlatformState.frameDurationMs);
 
 			} else if (ednPlatformState.frameCount > 1) {
 				printf("\n\n\nThis is bad, missed a frame\n\n\n");
-				performance.msPerFrame = 1000.0f 
-					* (SDL_GetPerformanceCounter() - performance.previousCounter) 
-					/ (double)performance.performanceCountFrequency;
-				performance.mcpf = (double)(_rdtsc() -  performance.previousCycle) / (1000.0f * 1000.0f);
-
+				msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (double)performanceCountFrequency;
+				mcpf = (double)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
 			}
 
-			performance.previousCounter = SDL_GetPerformanceCounter();
-			performance.previousCycle = _rdtsc();
+			previousCounter = SDL_GetPerformanceCounter();
+			previousCycle = _rdtsc();
 
-			printf("%.02fmspf, %.02fmcpf\n", performance.msPerFrame, performance.mcpf);
+			printf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
 		}
 	}
 
