@@ -35,16 +35,16 @@ int ednUpdateFrame(EdnPlatformState ednPlatformState) {
 
 	// render weird grandient
 	{
-		if (ednPlatformState.isWPressed) {
+		if (ednPlatformState.ednInput.isWPressed) {
 			ednGameState->greenOffset += 10;
 		} 
-		if (ednPlatformState.isAPressed) {
+		if (ednPlatformState.ednInput.isAPressed) {
 			ednGameState->blueOffset += 10;
 		} 
-		if (ednPlatformState.isSPressed) {
+		if (ednPlatformState.ednInput.isSPressed) {
 			ednGameState->greenOffset -= 10;
 		} 
-		if (ednPlatformState.isDPressed) {
+		if (ednPlatformState.ednInput.isDPressed) {
 			ednGameState->blueOffset -= 10;
 		}
 

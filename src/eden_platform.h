@@ -5,6 +5,13 @@
 #include <stdlib.h>
 
 typedef struct {
+	bool isWPressed;
+	bool isAPressed;
+	bool isSPressed;
+	bool isDPressed;
+} EdnInput;
+
+typedef struct {
 
 	void *baseData;
 	long baseDataByteCount;
@@ -32,10 +39,10 @@ typedef struct {
 	int16_t *audioFrameData;
 	long audioFrameDataByteCount;
 
-	bool isWPressed;
-	bool isAPressed;
-	bool isSPressed;
-	bool isDPressed;
+	EdnInput ednInput;
+
+	void *gameData;
+	long gameDataByteCount;
 
 	long gamePermanentDataByteCount;
 	void *gamePermanentData;

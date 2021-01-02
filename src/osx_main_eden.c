@@ -5,6 +5,12 @@
 #include <stdbool.h>
 #include <sys/stat.h> // file status
 #include <sys/mman.h> // memory mapping
+#include <errno.h>
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
@@ -47,6 +53,7 @@ void audioCallback(void *userdata, uint8_t *stream, int length) {
 		}
 	}
 	// todo tks figure out why this collision is occuring here every second or two
+	// also, this is causing the audio to skip...
 	if (isCollision) { printf("Write and play audio head collided in callback\n"); }
 }
 
@@ -55,15 +62,35 @@ int main(int argc, char** args) {
 
 	EdnPlatformState ednPlatformState;
 
+	AudioBuffer audioBuffer;
+
+	// todo tks work in progress, this is getting to the point where a big memory struct would be kind of nice...
+	long platformAudioBufferByteCount;
+	long platformAssetFileByteCount;
+	void *platformAssetFileData;
+	// long platformLoopFileByteCount;
+	// void *platformLoopFileData;
+
 	// preallocate everything according to the max possible size...
 	{
 		// enough memory to display two 4K displays with 4 bytes per pixel
 		ednPlatformState.imageFrameDataByteCount = 4 * 4096 * 2160 * 2;
 		// enough audio for 10 seconds of 48000 LR samples with ints
 		ednPlatformState.audioFrameDataByteCount = sizeof(int16_t) * 2 * 4800 * 10;
-		ednPlatformState.platformDataByteCount = ednPlatformState.audioFrameDataByteCount;
 		ednPlatformState.gamePermanentDataByteCount = megabytes(1);
-		ednPlatformState.gameTransientDataByteCount = gigabytes(2);
+		// ednPlatformState.gameTransientDataByteCount = gigabytes(2);
+		ednPlatformState.gameTransientDataByteCount = megabytes(100);
+		ednPlatformState.gameDataByteCount = ednPlatformState.gamePermanentDataByteCount + ednPlatformState.gameTransientDataByteCount;
+
+		// todo tks this should split into files and the stuff for the audio ring buffer
+		platformAudioBufferByteCount = ednPlatformState.audioFrameDataByteCount;
+		platformAssetFileByteCount = megabytes(100);
+		// platformLoopFileByteCount = ednPlatformState.gamePermanentDataByteCount + ednPlatformState.gameTransientDataByteCount;
+
+		ednPlatformState.platformDataByteCount = platformAudioBufferByteCount 
+			+ platformAssetFileByteCount;
+			// + platformLoopFileByteCount;
+
 		ednPlatformState.baseDataByteCount = 
 			ednPlatformState.imageFrameDataByteCount
 			+ ednPlatformState.audioFrameDataByteCount
@@ -80,10 +107,7 @@ int main(int argc, char** args) {
 										 MAP_ANON | MAP_PRIVATE,
 										 -1, 0);
 
-		if (ednPlatformState.baseData == MAP_FAILED) {
-			fprintf(stderr, "failed to allocate the big chunk of memory");
-			exit(1);
-		}
+		if (ednPlatformState.baseData == MAP_FAILED) { fprintf(stderr, "failed to allocate the big chunk of memory"); exit(1); }
 
 		// todo tks fix this
 		void *address = ednPlatformState.baseData;
@@ -91,17 +115,46 @@ int main(int argc, char** args) {
 		ednPlatformState.platformData = address;
 		address += ednPlatformState.platformDataByteCount;
 
+		{
+			void *subAddress = ednPlatformState.platformData;
+
+			audioBuffer.data = subAddress;
+			subAddress += platformAudioBufferByteCount;
+
+			platformAssetFileData = subAddress;
+			subAddress += platformAssetFileByteCount;
+
+			// platformLoopFileData = subAddress;
+			// subAddress += platformLoopFileByteCount;
+
+			if (subAddress != address) {
+				fprintf(stderr, "subdividing memory calculation failed\n");
+				exit(1);
+			}
+		}
+
 		ednPlatformState.imageFrameData = address; 
 		address += ednPlatformState.imageFrameDataByteCount;
 
 		ednPlatformState.audioFrameData = address; 
 		address += ednPlatformState.audioFrameDataByteCount;
 
-		ednPlatformState.gamePermanentData = address; 
-		address += ednPlatformState.gamePermanentDataByteCount;
+		ednPlatformState.gameData = address;
+		address += ednPlatformState.gameDataByteCount;
+		{
+			void *subAddress = ednPlatformState.gameData;
 
-		ednPlatformState.gameTransientData = address; 
-		address += ednPlatformState.gameTransientDataByteCount;
+			ednPlatformState.gamePermanentData = subAddress; 
+			subAddress += ednPlatformState.gamePermanentDataByteCount;
+
+			ednPlatformState.gameTransientData = subAddress; 
+			subAddress += ednPlatformState.gameTransientDataByteCount;
+
+			if (subAddress != address) {
+				fprintf(stderr, "subdividing game memeory calculation failed\n");
+				exit(1);
+			}
+		}
 	}
 
 	ednPlatformState.imageWidth = 1280;
@@ -129,7 +182,6 @@ int main(int argc, char** args) {
 		if (texture == NULL) { fprintf(stderr, "SDL create texture. %s\n", SDL_GetError()); exit(1); }
 	}
 
-	AudioBuffer audioBuffer;
 	// Open our audio device:
 	{
 		// todo tks make this a little different?
@@ -138,7 +190,6 @@ int main(int argc, char** args) {
 		// this is audio samples per second divided by 30
 		ednPlatformState.audioFrameDataSize = 3200;
 		audioBuffer.size = ednPlatformState.audioFrameDataSize * 5;
-		audioBuffer.data = ednPlatformState.platformData;
 		audioBuffer.playCursor = 0;
 		// set the write cursor a little ahead of the play cursor
 		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 2;
@@ -188,6 +239,13 @@ int main(int argc, char** args) {
 		if (ednInit(ednPlatformState) != 0) { fprintf(stderr, "init eden call. %s\n", ednGetError(ednPlatformState)); exit(1); }
 	}
 
+	printf("loaded the library\n");
+	// todo tks debug code, this isn't used for anything right now
+	struct stat loopFileStat;
+	int32_t loopFileHandle;
+	// char *loopFileName = "../bin/loop.edn";
+	char *loopFileName = "deleteme.edn";
+
 	// performance variables
 	uint64_t performanceCountFrequency = SDL_GetPerformanceFrequency();
 	uint64_t previousCounter = SDL_GetPerformanceCounter();
@@ -202,6 +260,16 @@ int main(int argc, char** args) {
 	ednPlatformState.frameCount = 0;
 	ednPlatformState.isRunning = true;
 
+	bool isLoopMode = false;
+	bool isRecordMode = false;
+
+#define INPUT_LOOP_MAX 15000
+	int inputLoopIndex = 0;
+	int inputLoopSize = 0;
+	bool isLPressed = false;
+	bool isKPressed = false;
+	EdnInput inputLoop[INPUT_LOOP_MAX];
+
 	while (ednPlatformState.isRunning) {
 		ednPlatformState.frameCount++;
 
@@ -213,11 +281,7 @@ int main(int argc, char** args) {
 				}
 
 				if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-					// if (ednPlatformState.imageFrameData != NULL) {
-						// todo tks something faster than malloc and free?
-						// free(ednPlatformState.imageFrameData);
-					// }
-
+					// todo tks troubleshoot why resizing stalls, is the texture memory the problem?
 					if (texture != NULL) {
 						SDL_DestroyTexture(texture);
 					}
@@ -229,30 +293,27 @@ int main(int argc, char** args) {
 						ednPlatformState.imageWidth * ednPlatformState.imageHeight * ednPlatformState.imageBytesPerPixel;
 
 					if (ednPlatformState.imageFrameDataSize > ednPlatformState.imageFrameDataByteCount) {
-						fprintf(stderr, "display is too big\n");
-						exit(1);
+						fprintf(stderr, "display is too big\n"); exit(1);
 					}
 
 					texture = SDL_CreateTexture(renderer,
 							SDL_PIXELFORMAT_ARGB8888,
 							SDL_TEXTUREACCESS_STREAMING,
 							ednPlatformState.imageWidth, ednPlatformState.imageHeight);
-					if (texture == NULL) {
-						fprintf(stderr, "SDL create texture. %s\n", SDL_GetError());
-						exit(1);
-					}
-
-					// todo tks something faster than malloc and free?
-					// ednPlatformState.imageFrameData = malloc(ednPlatformState.imageFrameDataSize);
+					if (texture == NULL) { fprintf(stderr, "SDL create texture. %s\n", SDL_GetError()); exit(1); }
 				}
 			}
 
 			keyboardState = SDL_GetKeyboardState(NULL); 
 			ednPlatformState.isRunning = ednPlatformState.isRunning && keyboardState[SDL_SCANCODE_ESCAPE] != 1;
-			ednPlatformState.isWPressed = keyboardState[SDL_SCANCODE_W] == 1; 
-			ednPlatformState.isAPressed = keyboardState[SDL_SCANCODE_A] == 1; 
-			ednPlatformState.isSPressed = keyboardState[SDL_SCANCODE_S] == 1; 
-			ednPlatformState.isDPressed = keyboardState[SDL_SCANCODE_D] == 1; 
+			ednPlatformState.ednInput.isWPressed = keyboardState[SDL_SCANCODE_W] == 1; 
+			ednPlatformState.ednInput.isAPressed = keyboardState[SDL_SCANCODE_A] == 1; 
+			ednPlatformState.ednInput.isSPressed = keyboardState[SDL_SCANCODE_S] == 1; 
+			ednPlatformState.ednInput.isDPressed = keyboardState[SDL_SCANCODE_D] == 1; 
+
+			// used for loop recording, don't pass to the game
+			isLPressed = keyboardState[SDL_SCANCODE_L] == 1;
+			isKPressed = keyboardState[SDL_SCANCODE_K] == 1;
 		} 
 
 		// hot reload the eden library
@@ -277,6 +338,119 @@ int main(int argc, char** args) {
 			}
 		}
 
+		// loop recording and playback
+		{
+			if (!isRecordMode && !isLoopMode && isLPressed) {
+				printf("file saving ");
+				isRecordMode = true;
+				isLoopMode = false;
+				inputLoopIndex = 0;
+				inputLoopSize = 0;
+				//save game data to the loop file
+
+				// loopFileHandle = open(loopFileName,
+						// O_WRONLY | O_CREAT | O_TRUNC,
+						// S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+
+				loopFileHandle = open(loopFileName, O_WRONLY | O_CREAT | O_TRUNC);
+				if (loopFileHandle < 0) {
+					fprintf(stderr, "loop file descriptor %d\n", errno);
+					exit(1);
+				}
+
+				uint32_t bytesToWrite = ednPlatformState.gameDataByteCount;
+				char *nextByteLocation = ednPlatformState.gameData;
+				while (bytesToWrite > 0) {
+					// todo tks this isn't working, I'm just too tired to understand why
+					// maybe I'm doing something silly with the memory, like it maybe doesn't like
+					// that the memory is unused or partially used or something like that
+					ssize_t bytesWritten = write(loopFileHandle, nextByteLocation, bytesToWrite);
+					if (bytesWritten == -1) {
+						fprintf(stderr, "write loop file %d\n", errno);
+						exit(1);
+					}
+					bytesToWrite -= bytesWritten;
+					nextByteLocation += bytesWritten;
+				}
+
+				if (close(loopFileHandle) != 0) {
+					fprintf(stderr, "close loop file %d\n", errno);
+					exit(1);
+				}
+
+			} else if (isRecordMode && !isLPressed) {
+				printf("file recording %d ", inputLoopSize);
+				isLoopMode = false;
+				if (inputLoopSize == INPUT_LOOP_MAX) {
+					isRecordMode = false;
+					isLoopMode = true;
+					inputLoopIndex = 0;
+
+				} else {
+					inputLoop[inputLoopIndex].isWPressed = ednPlatformState.ednInput.isWPressed;
+					inputLoop[inputLoopIndex].isAPressed = ednPlatformState.ednInput.isAPressed;
+					inputLoop[inputLoopIndex].isSPressed = ednPlatformState.ednInput.isSPressed;
+					inputLoop[inputLoopIndex].isDPressed = ednPlatformState.ednInput.isDPressed;
+
+					inputLoopIndex++;
+					inputLoopSize++;
+				}
+
+			} else if (isRecordMode && isLPressed) {
+				printf("end recording ");
+				isRecordMode = false;
+				isLoopMode = true;
+				inputLoopIndex = 0;
+				// accumulate the input stream
+
+			} else if (isLoopMode && !isKPressed) {
+				printf("looping %d " , inputLoopIndex);
+				if (inputLoopIndex == 0) {
+					// open the file, load game memory
+					loopFileHandle = open(loopFileName, O_RDONLY);
+					if (fstat(loopFileHandle, &loopFileStat) == -1) {
+						fprintf(stderr, "loop file stat\n");
+						exit(1);
+					}
+
+					if (loopFileStat.st_size != ednPlatformState.gameDataByteCount) {
+						fprintf(stderr, "loop file expecting %ld but found %lld", ednPlatformState.gameDataByteCount, loopFileStat.st_size);
+						exit(1);
+					}
+
+					uint32_t bytesToRead = loopFileStat.st_size;
+					void *nextByteLocation = ednPlatformState.gameData;
+					while (bytesToRead > 0) {
+						ssize_t bytesRead = read(loopFileHandle, nextByteLocation, bytesToRead);
+						if (bytesRead == -1) {
+							close(loopFileHandle);
+							break;
+						}
+						bytesToRead -= bytesRead;
+						nextByteLocation += bytesRead;
+					}
+
+					if (close(loopFileHandle) != 0) {
+						fprintf(stderr, "close loop file\n");
+						exit(1);
+					}
+				}
+				ednPlatformState.ednInput.isWPressed = inputLoop[inputLoopIndex].isWPressed;
+				ednPlatformState.ednInput.isAPressed = inputLoop[inputLoopIndex].isAPressed;
+				ednPlatformState.ednInput.isSPressed = inputLoop[inputLoopIndex].isSPressed;
+				ednPlatformState.ednInput.isDPressed = inputLoop[inputLoopIndex].isDPressed;
+
+				inputLoopIndex = (inputLoopIndex + 1) % inputLoopSize;
+
+			} else if (isLoopMode && isKPressed) {
+				isLoopMode = false;
+				isRecordMode = false;
+				inputLoopIndex = 0;
+				inputLoopSize = 0;
+			}
+		}
+		
+
 		// have eden update the frame
 		{
 			if (ednUpdateFrame(ednPlatformState) != 0) { fprintf(stderr, "error updating frame. %s\n", ednGetError(ednPlatformState)); exit(1); }
@@ -298,6 +472,8 @@ int main(int argc, char** args) {
 			audioBuffer.data[audioBuffer.writeCursor] = ednPlatformState.audioFrameData[index];
 			audioBuffer.writeCursor = (audioBuffer.writeCursor + 1) % audioBuffer.size;
 		}
+
+		// todo tks have a file loading portion of the code here
 
 		// lock in the framerate by waiting, and output the performance
 		{
