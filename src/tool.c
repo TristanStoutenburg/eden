@@ -16,7 +16,8 @@ int main(int argc, char** args) {
 
 	if (argc == 2 && strcmp(args[1], "run") == 0) {
 		// run the game
-		strcpy(commandBuffer, "./../bin/eden");
+		strcpy(commandBuffer, "rm -f ../bin/loop.edn");
+		strcat(commandBuffer, " && ./../bin/eden");
 
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "game") == 0) {
 		// recompile the eden shared library
@@ -27,15 +28,24 @@ int main(int argc, char** args) {
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "platform") == 0) {
 		strcpy(commandBuffer, "gcc osx_main_eden.c -o ../bin/eden ");
 		strcat(commandBuffer, " -framework OpenGL -l glew -l sdl2 -l sdl2_image -l sdl2_ttf -l sdl2_mixer "); 
+		strcat(commandBuffer, " && rm -f ../bin/loop.edn");
 
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "tool") == 0) {
 		strcpy(commandBuffer, "gcc tool.c -o tool");
+
+	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "gamer") == 0) {
+		strcpy(commandBuffer, "gcc gamer.c -o ./../bin/gamer");
+
+	} else if (argc == 2 && strcmp(args[1], "gamer") == 0) {
+		// run the gamer
+		strcpy(commandBuffer, "./../bin/gamer");
 
 	} else if (argc == 2 && strcmp(args[1], "help") == 0) {
 		// show the help menu
 		strcpy(commandBuffer, "echo 'tool options:\n");
 		strcat(commandBuffer, "run - run the game\n");
-		strcat(commandBuffer, "build game|platform|tool - recompile the game or the loop or the tool\n");
+		strcat(commandBuffer, "build game|platform|tool|gamer - recompile the game or the loop or the tool\n");
+		strcat(commandBuffer, "gamer - run the game recompiler\n");
 		strcat(commandBuffer, "help\n");
 		strcat(commandBuffer, "'");
 

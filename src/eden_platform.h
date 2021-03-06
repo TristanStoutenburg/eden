@@ -9,6 +9,7 @@ typedef struct {
 	bool isAPressed;
 	bool isSPressed;
 	bool isDPressed;
+	bool isMPressed;
 } EdnInput;
 
 typedef struct {

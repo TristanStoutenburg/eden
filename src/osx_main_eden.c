@@ -54,7 +54,9 @@ void audioCallback(void *userdata, uint8_t *stream, int length) {
 	}
 	// todo tks figure out why this collision is occuring here every second or two
 	// also, this is causing the audio to skip...
+#if 0
 	if (isCollision) { printf("Write and play audio head collided in callback\n"); }
+#endif
 }
 
 int main(int argc, char** args) {
@@ -71,7 +73,7 @@ int main(int argc, char** args) {
 	// long platformLoopFileByteCount;
 	// void *platformLoopFileData;
 
-	// preallocate everything according to the max possible size...
+	// preallocate everything with more than enough space
 	{
 		// enough memory to display two 4K displays with 4 bytes per pixel
 		ednPlatformState.imageFrameDataByteCount = 4 * 4096 * 2160 * 2;
@@ -207,8 +209,8 @@ int main(int argc, char** args) {
 			printf("Oops! We didn't get AUDIO_S16LSB as our sample format!\n");
 			SDL_CloseAudio();
 		} else {
-			printf("Initialised an Audio device at frequency %d Hz, %d Channels, buffer size %d\n",
-				   audioSettings.freq, audioSettings.channels, audioSettings.samples);
+			// printf("Initialised an Audio device at frequency %d Hz, %d Channels, buffer size %d\n",
+				   // audioSettings.freq, audioSettings.channels, audioSettings.samples);
 			SDL_PauseAudio(0);
 		}
 	}
@@ -239,12 +241,10 @@ int main(int argc, char** args) {
 		if (ednInit(ednPlatformState) != 0) { fprintf(stderr, "init eden call. %s\n", ednGetError(ednPlatformState)); exit(1); }
 	}
 
-	printf("loaded the library\n");
 	// todo tks debug code, this isn't used for anything right now
 	struct stat loopFileStat;
-	int32_t loopFileHandle;
-	// char *loopFileName = "../bin/loop.edn";
-	char *loopFileName = "deleteme.edn";
+	int loopFileHandle;
+	char *loopFileName = "../bin/loop.edn";
 
 	// performance variables
 	uint64_t performanceCountFrequency = SDL_GetPerformanceFrequency();
@@ -310,6 +310,7 @@ int main(int argc, char** args) {
 			ednPlatformState.ednInput.isAPressed = keyboardState[SDL_SCANCODE_A] == 1; 
 			ednPlatformState.ednInput.isSPressed = keyboardState[SDL_SCANCODE_S] == 1; 
 			ednPlatformState.ednInput.isDPressed = keyboardState[SDL_SCANCODE_D] == 1; 
+			ednPlatformState.ednInput.isMPressed = keyboardState[SDL_SCANCODE_M] == 1; 
 
 			// used for loop recording, don't pass to the game
 			isLPressed = keyboardState[SDL_SCANCODE_L] == 1;
@@ -341,18 +342,17 @@ int main(int argc, char** args) {
 		// loop recording and playback
 		{
 			if (!isRecordMode && !isLoopMode && isLPressed) {
-				printf("file saving ");
 				isRecordMode = true;
 				isLoopMode = false;
 				inputLoopIndex = 0;
 				inputLoopSize = 0;
 				//save game data to the loop file
 
-				// loopFileHandle = open(loopFileName,
-						// O_WRONLY | O_CREAT | O_TRUNC,
-						// S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+				loopFileHandle = open(loopFileName,
+					O_WRONLY | O_CREAT | O_TRUNC,
+					S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 
-				loopFileHandle = open(loopFileName, O_WRONLY | O_CREAT | O_TRUNC);
+				// loopFileHandle = open(loopFileName, O_WRONLY | O_CREAT | O_TRUNC);
 				if (loopFileHandle < 0) {
 					fprintf(stderr, "loop file descriptor %d\n", errno);
 					exit(1);
@@ -379,7 +379,6 @@ int main(int argc, char** args) {
 				}
 
 			} else if (isRecordMode && !isLPressed) {
-				printf("file recording %d ", inputLoopSize);
 				isLoopMode = false;
 				if (inputLoopSize == INPUT_LOOP_MAX) {
 					isRecordMode = false;
@@ -397,17 +396,15 @@ int main(int argc, char** args) {
 				}
 
 			} else if (isRecordMode && isLPressed) {
-				printf("end recording ");
 				isRecordMode = false;
 				isLoopMode = true;
 				inputLoopIndex = 0;
-				// accumulate the input stream
 
 			} else if (isLoopMode && !isKPressed) {
-				printf("looping %d " , inputLoopIndex);
 				if (inputLoopIndex == 0) {
 					// open the file, load game memory
 					loopFileHandle = open(loopFileName, O_RDONLY);
+
 					if (fstat(loopFileHandle, &loopFileStat) == -1) {
 						fprintf(stderr, "loop file stat\n");
 						exit(1);
@@ -435,6 +432,7 @@ int main(int argc, char** args) {
 						exit(1);
 					}
 				}
+
 				ednPlatformState.ednInput.isWPressed = inputLoop[inputLoopIndex].isWPressed;
 				ednPlatformState.ednInput.isAPressed = inputLoop[inputLoopIndex].isAPressed;
 				ednPlatformState.ednInput.isSPressed = inputLoop[inputLoopIndex].isSPressed;
@@ -447,6 +445,17 @@ int main(int argc, char** args) {
 				isRecordMode = false;
 				inputLoopIndex = 0;
 				inputLoopSize = 0;
+				if (unlink(loopFileName) != 0) {
+					fprintf(stderr, "unlinking loop file %d\n", errno);
+					exit(1);
+				}
+			}
+
+			if (!ednPlatformState.isRunning && (isLoopMode || isRecordMode)) {
+				if (unlink(loopFileName) != 0) {
+					fprintf(stderr, "unlinking loop file %d\n", errno);
+					exit(1);
+				}
 			}
 		}
 		
@@ -466,7 +475,7 @@ int main(int argc, char** args) {
 		// update the audio
 		for (int index = 0; index < ednPlatformState.audioFrameDataSize; index++) {
 			if (((audioBuffer.writeCursor + 1) % audioBuffer.size) == audioBuffer.playCursor) {
-				printf("Write and play audio head collided while copying\n");
+				// printf("Write and play audio head collided while copying\n");
 				break;
 			}
 			audioBuffer.data[audioBuffer.writeCursor] = ednPlatformState.audioFrameData[index];
@@ -496,7 +505,9 @@ int main(int argc, char** args) {
 			previousCounter = SDL_GetPerformanceCounter();
 			previousCycle = _rdtsc();
 
+#if 0
 			printf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
+#endif
 		}
 	}
 
