@@ -118,7 +118,6 @@ int ednUpdateFrame(EdnPlatformState ednPlatformState) {
 			{ 1, 1, 1, 1,  1, 1, 1, 1,  0, 1, 1, 1,  1, 0, 1, 1}
 		};
 
-
 		for (int tileRow = 0; tileRow < 9; tileRow++) {
 			for (int tileColumn = 0; tileColumn < 16; tileColumn++) {
 				EdnColor3F tileColor3F;
@@ -137,7 +136,6 @@ int ednUpdateFrame(EdnPlatformState ednPlatformState) {
 						tileWidth * (float)(tileColumn), tileWidth * (float)(tileColumn + 1),
 						tileHeight * (float)(tileRow), tileHeight * (float)(tileRow + 1),
 						tileColor3F);
-
 			}
 		}
 

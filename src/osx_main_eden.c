@@ -500,6 +500,7 @@ int main(int argc, char** args) {
 				printf("\n\n\nThis is bad, missed a frame\n\n\n");
 				msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (double)performanceCountFrequency;
 				mcpf = (double)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
+				printf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
 			}
 
 			previousCounter = SDL_GetPerformanceCounter();

@@ -1,6 +1,9 @@
-1. Fix the audio skipping, it is too bad that it skips
-2. Fix the file loading portion of the code
-3. Have the loop from a file as the start
-4. Honestly, getting an image loaded is probably the next thing that I want to have happen... right?
-5. the frames look very jerky, why is this?
+[WORK] get on OpenGL
+
+[] load a bpm file
+[] Have the loop from a file as the start
+[] Fix the file loading portion of the code
+[] Honestly, getting an image loaded is probably the next thing that I want to have happen... right?
+[] Fix the audio skipping, it is too bad that it skips
+[] the frames look very jerky, why is this?
 

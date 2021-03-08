@@ -20,6 +20,7 @@ int main(int argc, char** args) {
 		if (gameModificationTime < gameFileStat.st_mtime) {
 			gameModificationTime = gameFileStat.st_mtime;
 			system("./tool build game");
+			printf("rebuilt eden %s", asctime(gmtime(&(gameFileStat.st_mtime))));
 		}
 		sleep(1);
 	}
