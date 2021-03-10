@@ -1,10 +1,14 @@
 # eden
-## builing
+## building
 
-I've been building using tool.c, if you compile tool using gcc tool.c -o tool, then you can 
+I've been building using src/tool.c, if you compile tool using
+```
+cd src
+gcc tool.c -o tool
 ./tool build game
 ./tool build platform
 ./tool run
+```
 
 Whih will run
 
