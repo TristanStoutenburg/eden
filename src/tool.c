@@ -21,24 +21,28 @@ int main(int argc, char** args) {
 
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "game") == 0) {
 		// recompile the eden shared library
-		strcpy(commandBuffer, "gcc -c eden.c -o ../bin/eden.o");
-		strcat(commandBuffer, " && gcc -shared ../bin/eden.o -o ../bin/eden.so");
+		strcpy(commandBuffer, "gcc -g -c eden.c -o ../bin/eden.o");
+		strcat(commandBuffer, " && gcc -g -shared ../bin/eden.o -o ../bin/eden.so");
 		strcat(commandBuffer, " && rm ../bin/eden.o");
 
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "platform") == 0) {
-		strcpy(commandBuffer, "gcc osx_main_eden.c -o ../bin/eden ");
+		strcpy(commandBuffer, "gcc -g osx_main_eden.c -o ../bin/eden ");
 		strcat(commandBuffer, " -framework OpenGL -l glew -l sdl2 -l sdl2_image -l sdl2_ttf -l sdl2_mixer "); 
 		strcat(commandBuffer, " && rm -f ../bin/loop.edn");
 
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "tool") == 0) {
-		strcpy(commandBuffer, "gcc tool.c -o tool");
+		strcpy(commandBuffer, "gcc -g tool.c -o tool");
 
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "gamer") == 0) {
-		strcpy(commandBuffer, "gcc gamer.c -o ./../bin/gamer");
+		strcpy(commandBuffer, "gcc -g gamer.c -o ./../bin/gamer");
 
 	} else if (argc == 2 && strcmp(args[1], "gamer") == 0) {
 		// run the gamer
 		strcpy(commandBuffer, "./../bin/gamer");
+
+	} else if (argc == 2 && strcmp(args[1], "debug") == 0) {
+		// run the gamer
+		strcpy(commandBuffer, "lldb ./../bin/eden");
 
 	} else if (argc == 2 && strcmp(args[1], "help") == 0) {
 		// show the help menu
@@ -46,6 +50,7 @@ int main(int argc, char** args) {
 		strcat(commandBuffer, "run - run the game\n");
 		strcat(commandBuffer, "build game|platform|tool|gamer - recompile the game or the loop or the tool\n");
 		strcat(commandBuffer, "gamer - run the game recompiler\n");
+		strcat(commandBuffer, "debug - debug the game recompiler\n");
 		strcat(commandBuffer, "help\n");
 		strcat(commandBuffer, "'");
 

@@ -15,6 +15,7 @@
 #include <SDL2/SDL.h>
 #include <GL/glew.h>
 #include <SDL2/SDL_opengl.h>
+#include <OpenGL/GL.h>
 #include <OpenGL/GLU.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
@@ -30,6 +31,7 @@
 #define terabytes(Value) (gigabytes(Value)*1024LL)
 
 typedef struct {
+	// hi strager, this might be relevant
     int size;
     int writeCursor;
     int playCursor;
@@ -37,6 +39,10 @@ typedef struct {
 } AudioBuffer;
 
 void audioCallback(void *userdata, uint8_t *stream, int length) {
+	// hi strager, this is probably the broken code
+	// basically, I have implemented my own ring buffer that has a write cursor and a play cursor
+	// and for some reason the play cursor is hitting the write cursor. 
+
 	// cast the stream to the signed, 16 bit integers that we're expecting
 	int16_t *dest = (int16_t *)stream;
 	int destLength = length / 2;
@@ -53,10 +59,8 @@ void audioCallback(void *userdata, uint8_t *stream, int length) {
 		}
 	}
 	// todo tks figure out why this collision is occuring here every second or two
-	// also, this is causing the audio to skip...
-#if 0
-	if (isCollision) { printf("Write and play audio head collided in callback\n"); }
-#endif
+	// also, this is proably why the audio sounds bad
+	// if (isCollision) { printf("Write and play audio head collided in callback\n"); }
 }
 
 int main(int argc, char** args) {
@@ -66,7 +70,7 @@ int main(int argc, char** args) {
 
 	AudioBuffer audioBuffer;
 
-	// todo tks work in progress, this is getting to the point where a big memory struct would be kind of nice...
+	// todo tks work in progress, maybe I should move all the memory pointers into a struct
 	long platformAudioBufferByteCount;
 	long platformAssetFileByteCount;
 	void *platformAssetFileData;
@@ -100,7 +104,7 @@ int main(int argc, char** args) {
 			+ ednPlatformState.gamePermanentDataByteCount
 			+ ednPlatformState.gameTransientDataByteCount;
 
-		// todo tks internal vs game build
+		// todo tks only do this for debug/devloper builds
 		void *baseAddress = (void *)terabytes(2);
 
 		// allocate one big memory block here
@@ -111,7 +115,6 @@ int main(int argc, char** args) {
 
 		if (ednPlatformState.baseData == MAP_FAILED) { fprintf(stderr, "failed to allocate the big chunk of memory"); exit(1); }
 
-		// todo tks fix this
 		void *address = ednPlatformState.baseData;
 
 		ednPlatformState.platformData = address;
@@ -185,16 +188,13 @@ int main(int argc, char** args) {
 	}
 
 	// Open our audio device:
-	{
-		// todo tks make this a little different?
+	{ // hi strager, this might be relevant
 		ednPlatformState.frameDurationMs = 1000.0f / 30.0f;
 		ednPlatformState.audioSamplesPerSecond = 48000;
-		// this is audio samples per second divided by 30
-		ednPlatformState.audioFrameDataSize = 3200;
+		ednPlatformState.audioFrameDataSize = 3200; // this is audio samples per second divided by 30
 		audioBuffer.size = ednPlatformState.audioFrameDataSize * 5;
 		audioBuffer.playCursor = 0;
-		// set the write cursor a little ahead of the play cursor
-		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 2;
+		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 2; // set the write cursor a little ahead of the play cursor
 
 		SDL_AudioSpec audioSettings = {0};
 		audioSettings.freq = ednPlatformState.audioSamplesPerSecond;
@@ -245,6 +245,24 @@ int main(int argc, char** args) {
 	struct stat loopFileStat;
 	int loopFileHandle;
 	char *loopFileName = "../bin/loop.edn";
+	
+
+	// todo tks do this a little different
+	char *bmpFileName = "../assets/test.bmp";
+	int bmpFileHandle = open(bmpFileName, O_RDONLY);
+	struct stat bmpFileStat;
+	fstat(bmpFileHandle, &bmpFileStat); // Don't forget to check for an error return in real code
+	// Allocate enough to hold the whole contents plus a '\0' char.
+	char *bmpData = malloc(bmpFileStat.st_size + 1);
+	ssize_t bytesRead = read(bmpFileHandle, bmpData, bmpFileStat.st_size);
+	if (bytesRead == -1) {
+		close(loopFileHandle);
+		return -1;
+	}
+	// bytesToRead -= bytesRead;
+	// nextByteLocation += bytesRead;
+	bmpData[bmpFileStat.st_size] = '\0';
+
 
 	// performance variables
 	uint64_t performanceCountFrequency = SDL_GetPerformanceFrequency();
@@ -266,8 +284,8 @@ int main(int argc, char** args) {
 #define INPUT_LOOP_MAX 15000
 	int inputLoopIndex = 0;
 	int inputLoopSize = 0;
-	bool isLPressed = false;
-	bool isKPressed = false;
+	int isLPressed = 0;
+	int isKPressed = 0;
 	EdnInput inputLoop[INPUT_LOOP_MAX];
 
 	while (ednPlatformState.isRunning) {
@@ -306,11 +324,11 @@ int main(int argc, char** args) {
 
 			keyboardState = SDL_GetKeyboardState(NULL); 
 			ednPlatformState.isRunning = ednPlatformState.isRunning && keyboardState[SDL_SCANCODE_ESCAPE] != 1;
-			ednPlatformState.ednInput.isWPressed = keyboardState[SDL_SCANCODE_W] == 1; 
-			ednPlatformState.ednInput.isAPressed = keyboardState[SDL_SCANCODE_A] == 1; 
-			ednPlatformState.ednInput.isSPressed = keyboardState[SDL_SCANCODE_S] == 1; 
-			ednPlatformState.ednInput.isDPressed = keyboardState[SDL_SCANCODE_D] == 1; 
-			ednPlatformState.ednInput.isMPressed = keyboardState[SDL_SCANCODE_M] == 1; 
+			ednPlatformState.ednInput.isWPressed = keyboardState[SDL_SCANCODE_W] == 1 ? ednPlatformState.ednInput.isWPressed + 1 : 0; 
+			ednPlatformState.ednInput.isAPressed = keyboardState[SDL_SCANCODE_A] == 1 ? ednPlatformState.ednInput.isAPressed + 1 : 0; 
+			ednPlatformState.ednInput.isSPressed = keyboardState[SDL_SCANCODE_S] == 1 ? ednPlatformState.ednInput.isSPressed + 1 : 0; 
+			ednPlatformState.ednInput.isDPressed = keyboardState[SDL_SCANCODE_D] == 1 ? ednPlatformState.ednInput.isDPressed + 1 : 0; 
+			ednPlatformState.ednInput.isMPressed = keyboardState[SDL_SCANCODE_M] == 1 ? ednPlatformState.ednInput.isMPressed + 1 : 0; 
 
 			// used for loop recording, don't pass to the game
 			isLPressed = keyboardState[SDL_SCANCODE_L] == 1;
@@ -474,6 +492,7 @@ int main(int argc, char** args) {
 
 		// update the audio
 		for (int index = 0; index < ednPlatformState.audioFrameDataSize; index++) {
+			// hi strager, this might be relevant
 			if (((audioBuffer.writeCursor + 1) % audioBuffer.size) == audioBuffer.playCursor) {
 				// printf("Write and play audio head collided while copying\n");
 				break;

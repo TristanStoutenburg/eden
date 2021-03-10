@@ -1,9 +1,18 @@
-[WORK] get on OpenGL
+[] load a bmp file
 
-[] load a bpm file
-[] Have the loop from a file as the start
+[] load a wav file
+[] load an mp2 file https://en.wikipedia.org/wiki/MPEG-2
+
+[] get on OpenGL
+
+[] do the rebuilding and library loading in a separate thread, that way there is no lag
+
 [] Fix the file loading portion of the code
-[] Honestly, getting an image loaded is probably the next thing that I want to have happen... right?
-[] Fix the audio skipping, it is too bad that it skips
-[] the frames look very jerky, why is this?
+[] Have the loop from a file as the start
 
+[] split ednUpdateFrame into ednSimulatePhysics and ednRender?
+	This should prolly have the OpenGL stuff, right?
+
+[] Fix the audio skipping, it is too bad that it skips
+
+[] the frames look very jerky, why is this?
