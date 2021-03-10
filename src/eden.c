@@ -23,7 +23,7 @@ char* ednGetError(EdnPlatformState ednPlatformState) {
 
 int ednInit(EdnPlatformState ednPlatformState) {
 	EdnGameState *ednGameState = (EdnGameState *)ednPlatformState.gamePermanentData;
-	ednGameState->toneVolume = 0;
+	ednGameState->toneVolume = 1000;
 	ednGameState->tonePeriod = ednPlatformState.audioSamplesPerSecond / 256;
 
 	return 0;
