@@ -1,4 +1,5 @@
 # eden
+## builing
 
 I've been building using tool.c, if you compile tool using gcc tool.c -o tool, then you can 
 ./tool build game
@@ -27,3 +28,6 @@ and
 ```
 ./bin/eden
 ```
+
+## description
+building my own game from scratch. I'm following along handmade hero. Mainly doing this to learn about game engines.
