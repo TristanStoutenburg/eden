@@ -1,5 +1,3 @@
-// filename eden.c
-
 #ifndef EDEN_PLATFORM_H
 #define EDEN_PLATFORM_H
 
@@ -7,11 +5,11 @@
 #include <stdlib.h>
 
 typedef struct {
-	int isWPressed;
-	int isAPressed;
-	int isSPressed;
-	int isDPressed;
-	int isMPressed;
+	unsigned int isWPressed;
+	unsigned int isAPressed;
+	unsigned int isSPressed;
+	unsigned int isDPressed;
+	unsigned int isMPressed;
 } EdnInput;
 
 typedef enum { BMP } EdnAssetType;
@@ -65,8 +63,11 @@ typedef struct {
 	long gameTransientDataByteCount;
 	void *gameTransientData;
 
+	// todo tks better asset lib
+	void *bmpData;
+
 	// todo tks memory stuff??
-	// todo tks file stuff? I'll probably want a request load asset or something like that, right?jkjkjkj
+	// todo tks file stuff? I'll probably want a request load asset or something like that, right?
 
 } EdnPlatformState;
 

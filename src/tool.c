@@ -4,6 +4,9 @@
 // that way we know if we should point to eden_osx_main or eden_win_main, etc.
 //
 // then, use the help argument to see the menu
+//
+//
+// todo tks vsynch of schedule or a timer
 
 #include <stdio.h>
 #include <stdlib.h>

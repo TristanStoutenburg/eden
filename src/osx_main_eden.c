@@ -18,8 +18,8 @@
 #include <OpenGL/GL.h>
 #include <OpenGL/GLU.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
-#include <SDL2/SDL_mixer.h>
+// #include <SDL2/SDL_ttf.h>
+// #include <SDL2/SDL_mixer.h>
 #include <time.h>
 
 #include <x86intrin.h>
@@ -31,7 +31,6 @@
 #define terabytes(Value) (gigabytes(Value)*1024LL)
 
 typedef struct {
-	// hi strager, this might be relevant
     int size;
     int writeCursor;
     int playCursor;
@@ -39,10 +38,6 @@ typedef struct {
 } AudioBuffer;
 
 void audioCallback(void *userdata, uint8_t *stream, int length) {
-	// hi strager, this is probably the broken code
-	// basically, I have implemented my own ring buffer that has a write cursor and a play cursor
-	// and for some reason the play cursor is hitting the write cursor. 
-
 	// cast the stream to the signed, 16 bit integers that we're expecting
 	int16_t *dest = (int16_t *)stream;
 	int destLength = length / 2;
@@ -59,7 +54,7 @@ void audioCallback(void *userdata, uint8_t *stream, int length) {
 		}
 	}
 	// todo tks figure out why this collision is occuring here every second or two
-	// also, this is proably why the audio sounds bad
+	// but only when the window is out of focus, crazy stuff is happening here
 	// if (isCollision) { printf("Write and play audio head collided in callback\n"); }
 }
 
@@ -194,7 +189,7 @@ int main(int argc, char** args) {
 		ednPlatformState.audioFrameDataSize = 3200; // this is audio samples per second divided by 30
 		audioBuffer.size = ednPlatformState.audioFrameDataSize * 5;
 		audioBuffer.playCursor = 0;
-		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 2; // set the write cursor a little ahead of the play cursor
+		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 4; // set the write cursor a little ahead of the play cursor
 
 		SDL_AudioSpec audioSettings = {0};
 		audioSettings.freq = ednPlatformState.audioSamplesPerSecond;
@@ -248,12 +243,14 @@ int main(int argc, char** args) {
 	
 
 	// todo tks do this a little different
+// bits per pixel 16
+// compression level 3
 	char *bmpFileName = "../assets/test.bmp";
 	int bmpFileHandle = open(bmpFileName, O_RDONLY);
 	struct stat bmpFileStat;
 	fstat(bmpFileHandle, &bmpFileStat); // Don't forget to check for an error return in real code
 	// Allocate enough to hold the whole contents plus a '\0' char.
-	char *bmpData = malloc(bmpFileStat.st_size + 1);
+	char *bmpData = ednPlatformState.gameTransientData;
 	ssize_t bytesRead = read(bmpFileHandle, bmpData, bmpFileStat.st_size);
 	if (bytesRead == -1) {
 		close(loopFileHandle);
@@ -379,6 +376,8 @@ int main(int argc, char** args) {
 				uint32_t bytesToWrite = ednPlatformState.gameDataByteCount;
 				char *nextByteLocation = ednPlatformState.gameData;
 				while (bytesToWrite > 0) {
+
+
 					// todo tks this isn't working, I'm just too tired to understand why
 					// maybe I'm doing something silly with the memory, like it maybe doesn't like
 					// that the memory is unused or partially used or something like that
@@ -492,7 +491,6 @@ int main(int argc, char** args) {
 
 		// update the audio
 		for (int index = 0; index < ednPlatformState.audioFrameDataSize; index++) {
-			// hi strager, this might be relevant
 			if (((audioBuffer.writeCursor + 1) % audioBuffer.size) == audioBuffer.playCursor) {
 				// printf("Write and play audio head collided while copying\n");
 				break;
@@ -516,10 +514,11 @@ int main(int argc, char** args) {
 				} while (msPerFrame < ednPlatformState.frameDurationMs);
 
 			} else if (ednPlatformState.frameCount > 1) {
-				printf("\n\n\nThis is bad, missed a frame\n\n\n");
+				// todo tks fix this bad boy right here
+				// printf("\n\n\nThis is bad, missed a frame\n\n\n");
 				msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (double)performanceCountFrequency;
 				mcpf = (double)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
-				printf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
+				// printf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
 			}
 
 			previousCounter = SDL_GetPerformanceCounter();
