@@ -1,66 +1,93 @@
 #ifndef EDEN_PLATFORM_H
 #define EDEN_PLATFORM_H
 
-#include <stdbool.h>
-#include <stdlib.h>
+typedef unsigned short uint16;
+typedef unsigned int   uint32;
+typedef unsigned long  uint64;
+
+typedef          short  int16;
+typedef          int    int32;
+typedef          long   int64;
+
+typedef          float  real32;
+typedef          double real64;
+
+#define short SHORT_USAGE_NOT_ALLOWED
+#define int INT_USAGE_NOT_ALLOWED
+#define long LONG_USAGE_NOT_ALLOWED
+#define float FLOAT_USAGE_NOT_ALLOWED
+#define double FLOAT_USAGE_NOT_ALLOWED
+#define unsigned UNSIGNED_USAGE_NOT_ALLOWED
+#define printf PRINTF_USAGE_NOT_ALLOWED
+#define fprintf FPRINTF_USAGE_NOT_ALLOWED
+// todo figure out how to get redefine the macros without warnings?
+// #define sprintf SPRINTF_USAGE_NOT_ALLOWED
 
 typedef struct {
-	unsigned int isWPressed;
-	unsigned int isAPressed;
-	unsigned int isSPressed;
-	unsigned int isDPressed;
-	unsigned int isMPressed;
+	uint32 isWPressed;
+	uint32 isAPressed;
+	uint32 isSPressed;
+	uint32 isDPressed;
+	uint32 isMPressed;
 } EdnInput;
 
-typedef enum { BMP } EdnAssetType;
+typedef enum { EMPTY, LOADING, LOADED, UNLOADING, FILE_CLOSED } EdnAssetStatus;
 
+#define EDN_ASSET_NAME_MAX 64
+#define EDN_ASSET_MAX 200
 typedef struct {
-	EdnAssetType ednAssetType;
-	long ednAssetDataByteCount;
-	char ednAssetName[64];
+	char fileName[EDN_ASSET_NAME_MAX];
+	uint32 fileHandle;
+	// the status and byte count is used for the game to ask the platform to load
+	// the file into a chunk of memory, but the file read into the asset data pointer
+	// while likely be smaller
+	EdnAssetStatus ednAssetStatus;
+	int64 ednAssetDataByteCount;
+	// this points to somewhere inside of the memory that eden.c manages
 	void* ednAssetData;
 } EdnAsset;
+
 
 typedef struct {
 
 	void *baseData;
-	long baseDataByteCount;
+	int64 baseDataByteCount;
 
 	void *platformData;
-	long platformDataByteCount;
+	int64 platformDataByteCount;
 
-	bool isRunning;
+	uint32 isRunning;
 
-	int frameCount;
-	double frameDurationMs;
+	uint32 frameCount;
+	real32 frameDurationMs;
 
-	int imageWidth;
-	int imageHeight;
-    int imageBytesPerPixel;
-	int imageFrameDataSize;
-	int imageFrameDataPitch;
+	uint32 imageWidth;
+	uint32 imageHeight;
+    uint32 imageBytesPerPixel;
+	uint32 imageFrameDataSize;
+	uint32 imageFrameDataPitch;
 	void *imageFrameData;
-	long imageFrameDataByteCount;
+	int64 imageFrameDataByteCount;
 
-	bool audioIsPlaying;
-	int audioSamplesPerSecond;
-	int audioBytesPerSample;
-	int audioFrameDataSize;
-	int16_t *audioFrameData;
-	long audioFrameDataByteCount;
+	uint32 audioIsPlaying;
+	uint32 audioSamplesPerSecond;
+	uint32 audioBytesPerSample;
+	uint32 audioFrameDataSize;
+	int16 *audioFrameData;
+	int64 audioFrameDataByteCount;
 
-	int ednAssetCount;
-	EdnAsset* ednAssets;
+	uint32 ednAssetCount;
+	EdnAsset ednAssets[EDN_ASSET_MAX];
 
 	EdnInput ednInput;
 
 	void *gameData;
-	long gameDataByteCount;
+	int64 gameDataByteCount;
 
-	long gamePermanentDataByteCount;
+	int64 gamePermanentDataByteCount;
 	void *gamePermanentData;
 
-	long gameTransientDataByteCount;
+	int64 gameTransientDataByteCount;
 	void *gameTransientData;
 
 	// todo tks better asset lib
