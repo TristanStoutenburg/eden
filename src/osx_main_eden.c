@@ -10,7 +10,7 @@
 
 #include <SDL2/SDL.h> // todo tks can I get off this? That would be nice... 
 
-#include <x86intrin.h> // needed for for the counter intrinsic, maybe move to an intrinsics file
+#include <x86intrin.h> // needed for for the counter srinsic, maybe move to an srinsics file
 
 #include <stdarg.h> // varargs
 
@@ -31,8 +31,8 @@ void ednPrintf(const char *message, ...) {
 	char printBuffer[PRINT_BUFFER_MAX];
 
 	va_list args;
-	int32 printBufferIndex = 0;
-	int32 messageIndex = 0;
+	s32 printBufferIndex = 0;
+	s32 messageIndex = 0;
 
 	va_start(args, message);
 	while (message != NULL && message[messageIndex] != '\0') {
@@ -41,16 +41,16 @@ void ednPrintf(const char *message, ...) {
 			if (message[messageIndex] == 'd') {
 				messageIndex++;
 
-				int32 int32Val = va_arg(args, int32);
+				s32 s32Val = va_arg(args, s32);
 
-				int32 cursor = printBufferIndex;
-				if (int32Val < 0) {
+				s32 cursor = printBufferIndex;
+				if (s32Val < 0) {
 					if (printBufferIndex + 1 > PRINT_BUFFER_MAX) break;
 					printBuffer[printBufferIndex++] = '-';
 				}
-				int32 decimalPlace = 0;
-				int32 remainder = int32Val;
-				int32 divisor = 1000000000;
+				s32 decimalPlace = 0;
+				s32 remainder = s32Val;
+				s32 divisor = 1000000000;
 				while (divisor >= 1) {
 					decimalPlace = remainder / divisor;
 					remainder = remainder % divisor;
@@ -91,21 +91,21 @@ void ednPrintf(const char *message, ...) {
 }
 
 typedef struct {
-    int32 size;
-    int32 writeCursor;
-    int32 playCursor;
-    int16 *data;
+    s32 size;
+    s32 writeCursor;
+    s32 playCursor;
+    s16 *data;
 } AudioBuffer;
 
 
-void audioCallback(void *userdata, uint8_t *stream, int32 length) {
-	// cast the stream to the signed, 16 bit integers that we're expecting
-	int16 *dest = (int16 *)stream;
-	int32 destLength = length / 2;
+void audioCallback(void *userdata, u8 *stream, s32 length) {
+	// cast the stream to the signed, 16 bit segers that we're expecting
+	s16 *dest = (s16 *)stream;
+	s32 destLength = length / 2;
 	bool isCollision = false;
 
 	AudioBuffer *audioBuffer = (AudioBuffer *)userdata;
-	for (int32 index = 0; index < destLength; index++) {
+	for (s32 index = 0; index < destLength; index++) {
 		if (((audioBuffer->playCursor + 1) % audioBuffer->size) == audioBuffer->writeCursor) { 
 			dest[index] = 0; 
 			isCollision = true;
@@ -119,7 +119,7 @@ void audioCallback(void *userdata, uint8_t *stream, int32 length) {
 	// if (isCollision) { ednPrintf("Write and play audio head collided in callback\n"); }
 }
 
-int32 main(int32 argc, char** args) {
+s32 main(s32 argc, char** args) {
 	if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0) { 
 		ednPrintf("SDL init. %s\n", SDL_GetError());
 		exit(1);
@@ -129,25 +129,25 @@ int32 main(int32 argc, char** args) {
 
 	AudioBuffer audioBuffer;
 
-	// todo tks work in progress, maybe I should move all the memory pointers into a struct
-	int64 platformAudioBufferByteCount;
-	int64 platformAssetFileByteCount;
+	// todo tks work in progress, maybe I should move all the memory pointers so a struct
+	s64 platformAudioBufferByteCount;
+	s64 platformAssetFileByteCount;
 	void *platformAssetFileData;
-	// int64 platformLoopFileByteCount;
+	// s64 platformLoopFileByteCount;
 	// void *platformLoopFileData;
 
 	// preallocate everything with more than enough space
 	{
 		// enough memory to display two 4K displays with 4 bytes per pixel
 		ednPlatformState.imageFrameDataByteCount = 4 * 4096 * 2160 * 2;
-		// enough audio for 10 seconds of 48000 LR samples with ints
-		ednPlatformState.audioFrameDataByteCount = sizeof(int16) * 2 * 4800 * 10;
+		// enough audio for 10 seconds of 48000 LR samples with ss
+		ednPlatformState.audioFrameDataByteCount = sizeof(s16) * 2 * 4800 * 10;
 		ednPlatformState.gamePermanentDataByteCount = megabytes(1);
 		// ednPlatformState.gameTransientDataByteCount = gigabytes(2);
 		ednPlatformState.gameTransientDataByteCount = gigabytes(1);
 		ednPlatformState.gameDataByteCount = ednPlatformState.gamePermanentDataByteCount + ednPlatformState.gameTransientDataByteCount;
 
-		// todo tks this should split into files and the stuff for the audio ring buffer
+		// todo tks this should split so files and the stuff for the audio ring buffer
 		platformAudioBufferByteCount = ednPlatformState.audioFrameDataByteCount;
 		platformAssetFileByteCount = megabytes(100);
 		// platformLoopFileByteCount = ednPlatformState.gamePermanentDataByteCount + ednPlatformState.gameTransientDataByteCount;
@@ -285,8 +285,8 @@ int32 main(int32 argc, char** args) {
 	}
 
 	void *eden;
-	int32 (*ednInit)(EdnPlatformState*); 
-	int32 (*ednUpdateFrame)(EdnPlatformState*); 
+	s32 (*ednInit)(EdnPlatformState*); 
+	s32 (*ednUpdateFrame)(EdnPlatformState*); 
 	char* (*ednGetError)(EdnPlatformState*); 
 	struct stat edenFileStat;
 	time_t edenModificationTime;
@@ -297,8 +297,8 @@ int32 main(int32 argc, char** args) {
 		if (!eden) { ednPrintf("open eden game lib\n"); exit(1); }
 
 		// load the functions for the judas shared lib
-		ednInit = (int32 (*)(EdnPlatformState*))dlsym(eden, "ednInit");
-		ednUpdateFrame = (int32 (*)(EdnPlatformState*))dlsym(eden, "ednUpdateFrame");
+		ednInit = (s32 (*)(EdnPlatformState*))dlsym(eden, "ednInit");
+		ednUpdateFrame = (s32 (*)(EdnPlatformState*))dlsym(eden, "ednUpdateFrame");
 		ednGetError = (char* (*)(EdnPlatformState*))dlsym(eden, "ednGetError");
 
 		if (!ednUpdateFrame || !ednInit || !ednGetError) { ednPrintf("load functions for edn game lib\n"); exit(1); }
@@ -315,15 +315,15 @@ int32 main(int32 argc, char** args) {
 
 	// todo tks debug code, this isn't used for anything right now
 	struct stat loopFileStat;
-	int32 loopFileHandle;
+	s32 loopFileHandle;
 	char *loopFileName = "../bin/loop.edn";
 	
 	// performance variables
-	uint64 performanceCountFrequency = SDL_GetPerformanceFrequency();
-	uint64 previousCounter = SDL_GetPerformanceCounter();
-	real32 msPerFrame = 0;
-	uint64 previousCycle = _rdtsc();
-	real32 mcpf = 0;
+	u64 performanceCountFrequency = SDL_GetPerformanceFrequency();
+	u64 previousCounter = SDL_GetPerformanceCounter();
+	f32 msPerFrame = 0;
+	u64 previousCycle = _rdtsc();
+	f32 mcpf = 0;
 
 	// event variables
 	SDL_Event event;
@@ -336,10 +336,10 @@ int32 main(int32 argc, char** args) {
 	bool isRecordMode = false;
 
 #define INPUT_LOOP_MAX 15000
-	int32 inputLoopIndex = 0;
-	int32 inputLoopSize = 0;
-	int32 isLPressed = 0;
-	int32 isKPressed = 0;
+	s32 inputLoopIndex = 0;
+	s32 inputLoopSize = 0;
+	s32 isLPressed = 0;
+	s32 isKPressed = 0;
 	EdnInput inputLoop[INPUT_LOOP_MAX];
 
 	while (ednPlatformState.isRunning) {
@@ -386,6 +386,7 @@ int32 main(int32 argc, char** args) {
 			ednPlatformState.ednInput.isSPressed = keyboardState[SDL_SCANCODE_S] == 1 ? ednPlatformState.ednInput.isSPressed + 1 : 0; 
 			ednPlatformState.ednInput.isDPressed = keyboardState[SDL_SCANCODE_D] == 1 ? ednPlatformState.ednInput.isDPressed + 1 : 0; 
 			ednPlatformState.ednInput.isMPressed = keyboardState[SDL_SCANCODE_M] == 1 ? ednPlatformState.ednInput.isMPressed + 1 : 0; 
+			ednPlatformState.ednInput.isNPressed = keyboardState[SDL_SCANCODE_N] == 1 ? ednPlatformState.ednInput.isNPressed + 1 : 0; 
 
 			// used for loop recording, don't pass to the game
 			isLPressed = keyboardState[SDL_SCANCODE_L] == 1;
@@ -412,7 +413,7 @@ int32 main(int32 argc, char** args) {
 					}
 
 					// load the functions for the judas shared lib
-					ednUpdateFrame = (int32 (*)(EdnPlatformState*))dlsym(eden, "ednUpdateFrame");
+					ednUpdateFrame = (s32 (*)(EdnPlatformState*))dlsym(eden, "ednUpdateFrame");
 					ednGetError = (char* (*)(EdnPlatformState*))dlsym(eden, "ednGetError");
 
 					if (!ednUpdateFrame || !ednGetError) {
@@ -441,7 +442,7 @@ int32 main(int32 argc, char** args) {
 					exit(1);
 				}
 
-				uint32 bytesToWrite = ednPlatformState.gameDataByteCount;
+				u32 bytesToWrite = ednPlatformState.gameDataByteCount;
 				char *nextByteLocation = ednPlatformState.gameData;
 				while (bytesToWrite > 0) {
 
@@ -502,7 +503,7 @@ int32 main(int32 argc, char** args) {
 						exit(1);
 					}
 
-					uint32 bytesToRead = loopFileStat.st_size;
+					u32 bytesToRead = loopFileStat.st_size;
 					void *nextByteLocation = ednPlatformState.gameData;
 					while (bytesToRead > 0) {
 						ssize_t bytesRead = read(loopFileHandle, nextByteLocation, bytesToRead);
@@ -563,7 +564,7 @@ int32 main(int32 argc, char** args) {
 		}
 
 		// update the audio
-		for (int32 index = 0; index < ednPlatformState.audioFrameDataSize; index++) {
+		for (s32 index = 0; index < ednPlatformState.audioFrameDataSize; index++) {
 			if (((audioBuffer.writeCursor + 1) % audioBuffer.size) == audioBuffer.playCursor) {
 				// ednPrintf("Write and play audio head collided while copying\n");
 				break;
@@ -574,14 +575,13 @@ int32 main(int32 argc, char** args) {
 
 		// load and close asset files
 		{
-			for (int32 assetIndex = 0; assetIndex < ednPlatformState.ednAssetCount; assetIndex++) {
+			for (s32 assetIndex = 0; assetIndex < ednPlatformState.ednAssetCount; assetIndex++) {
 				EdnAsset *ednAsset= &ednPlatformState.ednAssets[assetIndex];
 				if (ednAsset->ednAssetStatus == LOADING) {
-					ednPrintf("name %s loaded %d\n", ednAsset->fileName, ednAsset->ednAssetStatus);
 					ednAsset->fileHandle = open(ednAsset->fileName, O_RDONLY);
 
 					struct stat assetFileStat;
-					fstat(ednAsset->fileHandle, &assetFileStat); // Don't forget to check for an error return in real code
+					fstat(ednAsset->fileHandle, &assetFileStat); // Don't forget to check for an error return in f code
 					ssize_t bytesRead = read(ednAsset->fileHandle, ednAsset->ednAssetData, assetFileStat.st_size);
 					if (bytesRead == -1) {
 						// todo do the looping thing to always get the full file
@@ -600,21 +600,21 @@ int32 main(int32 argc, char** args) {
 
 		// lock in the framerate by waiting, and output the performance
 		{
-			msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (real32)performanceCountFrequency;
-			mcpf = (real32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
+			msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (f32)performanceCountFrequency;
+			mcpf = (f32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
 
 			if (msPerFrame < ednPlatformState.frameDurationMs) {
-				SDL_Delay((uint32)(ednPlatformState.frameDurationMs - msPerFrame) - 2);
+				SDL_Delay((u32)(ednPlatformState.frameDurationMs - msPerFrame) - 2);
 				do {
-					msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (real32)performanceCountFrequency;
-					mcpf = (real32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
+					msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (f32)performanceCountFrequency;
+					mcpf = (f32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
 				} while (msPerFrame < ednPlatformState.frameDurationMs);
 
 			} else if (ednPlatformState.frameCount > 1) {
 				// todo tks fix this bad boy right here
 				// ednPrintf("\n\n\nThis is bad, missed a frame\n\n\n");
-				msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (real32)performanceCountFrequency;
-				mcpf = (real32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
+				msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (f32)performanceCountFrequency;
+				mcpf = (f32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
 				// ednPrintf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
 			}
 
@@ -622,7 +622,7 @@ int32 main(int32 argc, char** args) {
 			previousCycle = _rdtsc();
 
 #if 0
-			// todo print real32
+			// todo print f32
 			// ednPrintf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
 #endif
 		}

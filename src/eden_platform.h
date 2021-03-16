@@ -1,16 +1,19 @@
 #ifndef EDEN_PLATFORM_H
 #define EDEN_PLATFORM_H
 
-typedef unsigned short uint16;
-typedef unsigned int   uint32;
-typedef unsigned long  uint64;
+typedef unsigned char  u8;
+typedef unsigned short u16;
+typedef unsigned int   u32;
+typedef unsigned long  u64;
 
-typedef          short  int16;
-typedef          int    int32;
-typedef          long   int64;
+typedef          char   s8;
+typedef          short  s16;
+typedef          int    s32;
+typedef          long   s64;
 
-typedef          float  real32;
-typedef          double real64;
+typedef          float  f32;
+typedef          double f64;
+typedef     long double f128;
 
 #define short SHORT_USAGE_NOT_ALLOWED
 #define int INT_USAGE_NOT_ALLOWED
@@ -18,17 +21,22 @@ typedef          double real64;
 #define float FLOAT_USAGE_NOT_ALLOWED
 #define double FLOAT_USAGE_NOT_ALLOWED
 #define unsigned UNSIGNED_USAGE_NOT_ALLOWED
-#define printf PRINTF_USAGE_NOT_ALLOWED
+// #define printf PRINTF_USAGE_NOT_ALLOWED
 #define fprintf FPRINTF_USAGE_NOT_ALLOWED
 // todo figure out how to get redefine the macros without warnings?
 // #define sprintf SPRINTF_USAGE_NOT_ALLOWED
 
+// todo tks also disable int16_t 
+#define int16_t INT_16_T_USAGE_NOT_ALLOWED
+
+
 typedef struct {
-	uint32 isWPressed;
-	uint32 isAPressed;
-	uint32 isSPressed;
-	uint32 isDPressed;
-	uint32 isMPressed;
+	u32 isWPressed;
+	u32 isAPressed;
+	u32 isSPressed;
+	u32 isDPressed;
+	u32 isMPressed;
+	u32 isNPressed;
 } EdnInput;
 
 typedef enum { EMPTY, LOADING, LOADED, UNLOADING, FILE_CLOSED } EdnAssetStatus;
@@ -37,12 +45,12 @@ typedef enum { EMPTY, LOADING, LOADED, UNLOADING, FILE_CLOSED } EdnAssetStatus;
 #define EDN_ASSET_MAX 200
 typedef struct {
 	char fileName[EDN_ASSET_NAME_MAX];
-	uint32 fileHandle;
+	u32 fileHandle;
 	// the status and byte count is used for the game to ask the platform to load
-	// the file into a chunk of memory, but the file read into the asset data pointer
+	// the file so a chunk of memory, but the file read so the asset data pointer
 	// while likely be smaller
 	EdnAssetStatus ednAssetStatus;
-	int64 ednAssetDataByteCount;
+	s64 ednAssetDataByteCount;
 	// this points to somewhere inside of the memory that eden.c manages
 	void* ednAssetData;
 } EdnAsset;
@@ -51,43 +59,43 @@ typedef struct {
 typedef struct {
 
 	void *baseData;
-	int64 baseDataByteCount;
+	s64 baseDataByteCount;
 
 	void *platformData;
-	int64 platformDataByteCount;
+	s64 platformDataByteCount;
 
-	uint32 isRunning;
+	u32 isRunning;
 
-	uint32 frameCount;
-	real32 frameDurationMs;
+	u32 frameCount;
+	f32 frameDurationMs;
 
-	uint32 imageWidth;
-	uint32 imageHeight;
-    uint32 imageBytesPerPixel;
-	uint32 imageFrameDataSize;
-	uint32 imageFrameDataPitch;
+	u32 imageWidth;
+	u32 imageHeight;
+    u32 imageBytesPerPixel;
+	u32 imageFrameDataSize;
+	u32 imageFrameDataPitch;
 	void *imageFrameData;
-	int64 imageFrameDataByteCount;
+	s64 imageFrameDataByteCount;
 
-	uint32 audioIsPlaying;
-	uint32 audioSamplesPerSecond;
-	uint32 audioBytesPerSample;
-	uint32 audioFrameDataSize;
-	int16 *audioFrameData;
-	int64 audioFrameDataByteCount;
+	u32 audioIsPlaying;
+	u32 audioSamplesPerSecond;
+	u32 audioBytesPerSample;
+	u32 audioFrameDataSize;
+	s16 *audioFrameData;
+	s64 audioFrameDataByteCount;
 
-	uint32 ednAssetCount;
+	u32 ednAssetCount;
 	EdnAsset ednAssets[EDN_ASSET_MAX];
 
 	EdnInput ednInput;
 
 	void *gameData;
-	int64 gameDataByteCount;
+	s64 gameDataByteCount;
 
-	int64 gamePermanentDataByteCount;
+	s64 gamePermanentDataByteCount;
 	void *gamePermanentData;
 
-	int64 gameTransientDataByteCount;
+	s64 gameTransientDataByteCount;
 	void *gameTransientData;
 
 	// todo tks better asset lib

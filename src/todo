@@ -1,18 +1,28 @@
-[] load a bmp file
+[WORK] load a wav file
 
-[] load a wav file
 [] load an mp2 file https://en.wikipedia.org/wiki/MPEG-2
 
-[] get on OpenGL
+
+[] get on Cocoa/macos, no SDL in between
+[] get on linux window libraries?
+[] get on windows libraries
+
+
+[] split ednUpdateFrame into ednSimulatePhysics and ednRender?
+
+[] Fix the audio skipping, it is too bad that it skips
+	this is probably something to do with not locking in the framerate
+	like we should have the physics simulation run on the actual duration
+	per frame, although we do our best to lock it in, and do something similar
+	with the audio
+	To go further, if the frame takes longer than we expect, then we won't have filled
+	in the actual amount of audio that is needed
+
+[] the frames look very jerky, why is this?
+	maybe moving to 60 fps is the solution? I don't know, movies run at 24 fps, and they look better
+
 
 [] do the rebuilding and library loading in a separate thread, that way there is no lag
-
 [] Fix the file loading portion of the code
 [] Have the loop from a file as the start
 
-[] split ednUpdateFrame into ednSimulatePhysics and ednRender?
-	This should prolly have the OpenGL stuff, right?
-
-[] Fix the audio skipping, it is too bad that it skips
-
-[] the frames look very jerky, why is this?
