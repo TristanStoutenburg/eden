@@ -66,6 +66,7 @@ typedef struct {
 
 	u32 isRunning;
 
+	u32 framesPerSecond;
 	u32 frameCount;
 	f32 frameDurationMs;
 

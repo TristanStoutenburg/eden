@@ -386,30 +386,31 @@ s32 ednUpdateFrame(EdnPlatformState *ednPlatformState) {
 	{
 
 		if (ednPlatformState->ednInput.isMPressed) {
-			ednGameState->toneVolume = ednGameState->toneVolume + 10 < 0
+			ednGameState->toneVolume = ednGameState->toneVolume - 10 < 0
 				? 0 
-				: ednGameState->toneVolume - 10;
+				: ednGameState->toneVolume - 50;
 
 		} else if (ednPlatformState->ednInput.isNPressed) {
 			ednGameState->toneVolume = ednGameState->toneVolume + 10 > 32768
 				? 32768
-				: ednGameState->toneVolume + 10;
+				: ednGameState->toneVolume + 50;
 		}
+
+#if 1
+		for (s32 sampleIndex = 0; sampleIndex < ednPlatformState->audioFrameDataSize; sampleIndex++) {
+			ednPlatformState->audioFrameData[sampleIndex] = 
+				(s16)
+				(ednGameState->toneVolume * sinf(2.0f * PI32 * (f32)ednGameState->runningSampleIndex / (f32)ednGameState->tonePeriod));
+			ednGameState->runningSampleIndex += sampleIndex % 2;
+		}
+#else
 
 		if (ednPlatformState->ednAssets[1].ednAssetStatus == LOADED) {
 			EdnWav wav;
 			s32 wavParseResult = parseEdnWav(ednPlatformState->ednAssets[1].ednAssetData, &wav);
 			if (wavParseResult != 0) {
-				result = 0;
+				result = wavParseResult;
 			} else {
-#if 0
-				for (s32 sampleIndex = 0; sampleIndex < ednPlatformState->audioFrameDataSize; sampleIndex++) {
-					ednPlatformState->audioFrameData[sampleIndex] = 
-						(s16)
-						(ednGameState->toneVolume * sinf(2.0f * PI32 * (f32)ednGameState->runningSampleIndex / (f32)ednGameState->tonePeriod));
-					ednGameState->runningSampleIndex += sampleIndex % 2;
-				}
-#endif
 
 				for (s32 sampleIndex = 0; sampleIndex < ednPlatformState->audioFrameDataSize; sampleIndex++) {
 					if (ednGameState->waveBytePosition > (wav.wavCkSize - 44 + (wav.wavCkSize % 2)))  {
@@ -419,9 +420,7 @@ s32 ednUpdateFrame(EdnPlatformState *ednPlatformState) {
 					// todo multiply volume
 					// ednPlatformState->audioFrameData[sampleIndex] = 
 						// (s16) (ednGameState.toneVolume * (f32) (wavChunk.wavData + chunkCursor));
-
-					ednPlatformState->audioFrameData[sampleIndex] = * (s16*)(wav.wavDataSamples + ednGameState->waveBytePosition);
-					ednGameState->waveBytePosition++;
+					ednPlatformState->audioFrameData[sampleIndex] = * (s16*)(wav.wavDataSamples + ednGameState->waveBytePosition++);
 				}
 			}
 
@@ -436,6 +435,8 @@ s32 ednUpdateFrame(EdnPlatformState *ednPlatformState) {
 			ednPlatformState->ednAssets[1].ednAssetDataByteCount = 800000;
 			ednPlatformState->ednAssetCount = 2;
 		}
+
+#endif
 
 	}
 

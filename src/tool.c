@@ -30,7 +30,7 @@ int main(int argc, char** args) {
 
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "platform") == 0) {
 		strcpy(commandBuffer, "gcc -g osx_main_eden.c -o ../bin/eden ");
-		strcat(commandBuffer, " -framework OpenGL -l glew -l sdl2 -l sdl2_image -l sdl2_ttf -l sdl2_mixer "); 
+		strcat(commandBuffer, " -l sdl2 "); 
 		strcat(commandBuffer, " && rm -f ../bin/loop.edn");
 
 	} else if (argc == 3 && strcmp(args[1], "build") == 0 && strcmp(args[2], "tool") == 0) {

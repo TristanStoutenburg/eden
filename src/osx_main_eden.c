@@ -13,6 +13,7 @@
 #include <x86intrin.h> // needed for for the counter srinsic, maybe move to an srinsics file
 
 #include <stdarg.h> // varargs
+#include <time.h> // nanosleep
 
 #include "eden_platform.h"
 
@@ -51,6 +52,10 @@ void ednPrintf(const char *message, ...) {
 				s32 decimalPlace = 0;
 				s32 remainder = s32Val;
 				s32 divisor = 1000000000;
+				// todo tks I should have a char[64] buffer to parse it, and then just percent 10 64 times
+				// it would be a bit easier than this max buffer thingy
+				// 
+				// don't know how I'm going to do floatss
 				while (divisor >= 1) {
 					decimalPlace = remainder / divisor;
 					remainder = remainder % divisor;
@@ -140,10 +145,9 @@ s32 main(s32 argc, char** args) {
 	{
 		// enough memory to display two 4K displays with 4 bytes per pixel
 		ednPlatformState.imageFrameDataByteCount = 4 * 4096 * 2160 * 2;
-		// enough audio for 10 seconds of 48000 LR samples with ss
-		ednPlatformState.audioFrameDataByteCount = sizeof(s16) * 2 * 4800 * 10;
+		// enough audio for 10 seconds of 41000 LR samples with 16bits
+		ednPlatformState.audioFrameDataByteCount = 10 * (sizeof(s16) * 2 * 44100);
 		ednPlatformState.gamePermanentDataByteCount = megabytes(1);
-		// ednPlatformState.gameTransientDataByteCount = gigabytes(2);
 		ednPlatformState.gameTransientDataByteCount = gigabytes(1);
 		ednPlatformState.gameDataByteCount = ednPlatformState.gamePermanentDataByteCount + ednPlatformState.gameTransientDataByteCount;
 
@@ -258,9 +262,11 @@ s32 main(s32 argc, char** args) {
 
 	// Open our audio device:
 	{
-		ednPlatformState.frameDurationMs = 1000.0f / 30.0f;
-		ednPlatformState.audioSamplesPerSecond = 48000;
-		ednPlatformState.audioFrameDataSize = 3200; // this is audio samples per second divided by 30
+		// todo tks get rid of the fps magic number and the 4100 sample rate magic number
+		ednPlatformState.framesPerSecond = 60;
+		ednPlatformState.frameDurationMs = 1000.0f / (f32)ednPlatformState.framesPerSecond;
+		ednPlatformState.audioSamplesPerSecond = 44100;
+		ednPlatformState.audioFrameDataSize = ednPlatformState.audioSamplesPerSecond / ednPlatformState.framesPerSecond;
 		audioBuffer.size = ednPlatformState.audioFrameDataSize * 5;
 		audioBuffer.playCursor = 0;
 		audioBuffer.writeCursor = ednPlatformState.audioFrameDataSize * 4; // set the write cursor a little ahead of the play cursor
@@ -395,7 +401,7 @@ s32 main(s32 argc, char** args) {
 
 		// hot reload the eden library
 		{
-			if (ednPlatformState.frameCount % 30 == 0) { // only check every 30 frames
+			if (ednPlatformState.frameCount % 60 == 0) { // only check every 30 frames
 				stat("../bin/eden.so", &edenFileStat);
 				if (edenModificationTime < edenFileStat.st_mtime) {
 					edenModificationTime = edenFileStat.st_mtime;
@@ -424,7 +430,7 @@ s32 main(s32 argc, char** args) {
 		}
 
 		// loop recording and playback
-		{
+		if (true == false) {
 			if (!isRecordMode && !isLoopMode && isLPressed) {
 				isRecordMode = true;
 				isLoopMode = false;
@@ -552,7 +558,8 @@ s32 main(s32 argc, char** args) {
 		{
 			if (ednUpdateFrame(&ednPlatformState) != 0) {
 				ednPrintf("error updating frame. %s\n", ednGetError(&ednPlatformState));
-				exit(1); }
+				exit(1);
+			}
 		}
 
 
@@ -600,18 +607,26 @@ s32 main(s32 argc, char** args) {
 
 		// lock in the framerate by waiting, and output the performance
 		{
+			// todo tks use clock_setres
+			// todo tks use clock_gettime rather than SDL to count the time
 			msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (f32)performanceCountFrequency;
 			mcpf = (f32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
 
 			if (msPerFrame < ednPlatformState.frameDurationMs) {
-				SDL_Delay((u32)(ednPlatformState.frameDurationMs - msPerFrame) - 2);
+				// move to nanosleep
+				struct timespec addedDelay;
+				addedDelay.tv_sec = 0;
+				addedDelay.tv_nsec = (s64) ((ednPlatformState.frameDurationMs - msPerFrame - 1) * 100000); 
+				nanosleep(&addedDelay, NULL);
+				// SDL_Delay((u32)(ednPlatformState.frameDurationMs - msPerFrame) - 2);
 				do {
 					msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (f32)performanceCountFrequency;
 					mcpf = (f32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
 				} while (msPerFrame < ednPlatformState.frameDurationMs);
 
 			} else if (ednPlatformState.frameCount > 1) {
-				// todo tks fix this bad boy right here
+				// todo tks being off by a small amount shouldn't be a problem
+				//
 				// ednPrintf("\n\n\nThis is bad, missed a frame\n\n\n");
 				msPerFrame = 1000.0f * (SDL_GetPerformanceCounter() - previousCounter) / (f32)performanceCountFrequency;
 				mcpf = (f32)(_rdtsc() -  previousCycle) / (1000.0f * 1000.0f);
@@ -621,10 +636,9 @@ s32 main(s32 argc, char** args) {
 			previousCounter = SDL_GetPerformanceCounter();
 			previousCycle = _rdtsc();
 
-#if 0
 			// todo print f32
-			// ednPrintf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
-#endif
+			// todo tks still not perfect...
+			// printf("%.02fmspf, %.02fmcpf\n", msPerFrame, mcpf);
 		}
 	}
 
